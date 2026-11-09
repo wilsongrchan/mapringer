@@ -213,7 +213,30 @@ function boundsOf(rings: { center: LngLat; radiusKm: number }[]) {
   return b;
 }
 
-const padding = () => ({ top: 150, bottom: ($("result-panel").offsetHeight || 220) + 40, left: 30, right: 30 });
+// While playing, the challenge sits top centre and the lock-in panel bottom
+// centre. Once you lock in on a wide screen, the results move to a left column
+// (body.showing-result, see CSS) and the map's centre shifts right of it.
+const wide = matchMedia("(min-width: 800px)");
+const SIDEBAR_PX = 16 + 380 + 16;
+const sidebar = () => wide.matches && document.body.classList.contains("showing-result");
+
+function setResultLayout(on: boolean) {
+  document.body.classList.toggle("showing-result", on);
+  applyLayoutPadding();
+}
+
+/** Keep the rings in the middle of the part of the map the panels don't cover. */
+function applyLayoutPadding() {
+  map.setPadding({ left: sidebar() ? SIDEBAR_PX : 0, top: 0, right: 0, bottom: 0 });
+}
+applyLayoutPadding();
+wide.addEventListener("change", applyLayoutPadding);
+
+// fitBounds padding is on top of the layout padding above
+const padding = () =>
+  sidebar()
+    ? { top: 60, bottom: 60, left: 40, right: 60 }
+    : { top: 150, bottom: ($("result-panel").offsetHeight || 220) + 40, left: 30, right: 30 };
 
 // Gauge: log scale from 100x too few (left) to 100x too many (right), target in
 // the middle, coloured with the five score bands.
@@ -284,6 +307,7 @@ function showResult(r: Result, animate: boolean) {
   const center = { lng: r.lng, lat: r.lat };
   $("play-panel").hidden = true;
   $("result-panel").hidden = false;
+  setResultLayout(true);
   $("crosshair").classList.add("hidden");
   $("result-target").textContent = fmt(puzzle.target);
   r.score ??= score(r.population, puzzle.target); // results saved before scoring changed
@@ -406,6 +430,7 @@ function resetPlay() {
   locked = null;
   $("result-panel").hidden = true;
   $("play-panel").hidden = false;
+  setResultLayout(false);
   $("crosshair").classList.remove("hidden");
   lockBtn.disabled = false;
   lockBtn.textContent = "Lock in ring";

@@ -54,12 +54,12 @@ describe("puzzles", () => {
   it("scores on a symmetric log curve that plateaus", () => {
     expect(score(100, 100)).toBe(100);
     expect(score(200, 100)).toBeCloseTo(score(50, 100), 6); // 2x over = 2x under
-    expect(score(200, 100)).toBeGreaterThan(80);
+    expect(score(200, 100)).toBeGreaterThan(65); // 2x off ≈ 70
     expect(score(50_000, 51_000)).toBe(100); // within 5% is perfect
     expect(score(105, 100)).toBe(100);
     expect(score(110, 100)).toBeGreaterThan(97); // flat near the target
-    expect(score(1000, 100)).toBeGreaterThan(40); // 10x off still scores
-    expect(score(1e6, 100)).toBeGreaterThan(5);
+    expect(score(1000, 100)).toBeGreaterThan(20); // 10x off still scores (≈ 27)
+    expect(score(1e6, 100)).toBeGreaterThan(3);
     expect(score(0, 100)).toBe(0);
   });
 });

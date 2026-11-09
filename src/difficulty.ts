@@ -5,7 +5,7 @@ export type Difficulty = "easy" | "standard" | "hard";
 export const DIFFICULTIES: Record<Difficulty, { label: string; multiplier: number; blurb: string }> = {
   easy: { label: "Easy", multiplier: 0.8, blurb: "Satellite with labels and borders" },
   standard: { label: "Standard", multiplier: 1, blurb: "Light map with labels, no roads" },
-  hard: { label: "Hard", multiplier: 1.5, blurb: "Land, lakes and rivers only" },
+  hard: { label: "Hard", multiplier: 1.2, blurb: "Land, lakes and rivers only" },
 };
 
 export const DIFFICULTY_ORDER: Difficulty[] = ["easy", "standard", "hard"];

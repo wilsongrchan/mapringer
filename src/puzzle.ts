@@ -71,9 +71,9 @@ export function accuracy(population: number, target: number): number {
 }
 
 // Score curve knobs. SCORE_SCALE: how many orders of magnitude off halves your
-// score (0.8 → about 6x off scores 50). SCORE_SHAPE: >1 flattens the top so
+// score (0.5 → about 3.3x off scores 50). SCORE_SHAPE: >1 flattens the top so
 // near-misses barely cost anything.
-const SCORE_SCALE = 0.8;
+const SCORE_SCALE = 0.5;
 const SCORE_SHAPE = 1.5;
 
 /** Within this factor of the target (5%) counts as a perfect 100. */
@@ -83,7 +83,7 @@ const PERFECT_DECADES = Math.log10(PERFECT_RATIO);
 /**
  * Player score 0–100 on a log scale. Anything within 5% of the target scores
  * 100; beyond that it plateaus near the top and tails off slowly for big
- * misses (2x → 83, 10x → 43, 100x → 20).
+ * misses (2x → 70, 10x → 27, 100x → 11).
  */
 export function score(population: number, target: number): number {
   if (target <= 0) return 0;

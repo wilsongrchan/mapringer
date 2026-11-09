@@ -533,3 +533,36 @@ dialog ol {
 .points {
   white-space: nowrap;
 }
+
+/* ---- wide screens, after locking in: results in a left column ---- */
+@media (min-width: 800px) {
+  .showing-result .challenge,
+  .showing-result .bottom {
+    left: 16px;
+    transform: none;
+    width: 380px;
+  }
+
+  .showing-result .challenge {
+    top: calc(var(--safe-top) + 68px);
+    text-align: left;
+  }
+
+  .showing-result .bottom {
+    top: calc(var(--safe-top) + 156px);
+    bottom: auto;
+    max-height: calc(100vh - var(--safe-top) - 172px);
+    overflow-y: auto;
+    border-radius: var(--radius);
+  }
+
+  .showing-result .maplibregl-ctrl-bottom-right,
+  .showing-result .maplibregl-ctrl-bottom-left {
+    bottom: 0;
+  }
+
+  .showing-result .toast {
+    bottom: 32px;
+    left: calc(50% + 206px);
+  }
+}
