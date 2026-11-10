@@ -8,5 +8,15 @@
       "source": "/data/:file",
       "destination": "https://dqar2odvlkq3bezf.public.blob.vercel-storage.com/data/:file"
     }
+  ],
+  "headers": [
+    {
+      "source": "/data/:file",
+      "headers": [
+        { "key": "x-vercel-enable-rewrite-caching", "value": "0" },
+        { "key": "CDN-Cache-Control", "value": "no-store" },
+        { "key": "Vercel-CDN-Cache-Control", "value": "no-store" }
+      ]
+    }
   ]
 }
