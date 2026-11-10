@@ -6,7 +6,18 @@ import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&ur
 import "./style.css";
 import { applyStaticText, LANG, people, switchLanguage, t } from "./i18n";
 import { findClosestAnswer, MATCH_ACCURACY, type AnswerResult } from "./answer";
-import { applyMapStyle, applyRevealStyle, DIFFICULTIES, DIFFICULTY_ORDER, GLOBE, prefetchStyles, type Difficulty, type GameLayers } from "./difficulty";
+import {
+  applyMapStyle,
+  applyRevealStyle,
+  DIFFICULTIES,
+  DIFFICULTY_ORDER,
+  GLOBE,
+  loadPuzzleDifficulty,
+  prefetchStyles,
+  savePuzzleDifficulty,
+  type Difficulty,
+  type GameLayers,
+} from "./difficulty";
 import { circleRing, type LngLat } from "./geo";
 import { coords, placeName } from "./places";
 import { BONUS_MIN_SCORE, COUNTRIES, countryAt, questBonus, questDone, questFor, surveyRing, TROPIC_LAT, type Quest } from "./quests";
@@ -48,7 +59,8 @@ preloadPopulation();
 let locked: Result | null = UNLIMITED ? null : loadResult(puzzle.number);
 let attempt = 0; // bumps on every reset so stale async work is ignored
 // Always open on Hard, so nobody can study the labelled map and then switch to Hard.
-let difficulty: Difficulty = locked?.difficulty ?? "hard";
+// (or the easier map already chosen for today's puzzle, so a reload can't reset it)
+let difficulty: Difficulty = locked?.difficulty ?? (UNLIMITED ? null : loadPuzzleDifficulty(puzzle.number)) ?? "hard";
 
 /**
  * Start zoomed out far enough to see the whole globe between the panels. On a
@@ -388,27 +400,18 @@ map.on("resize", () => {
 });
 
 // ---- difficulty ----
-// Outside test mode the choice locks once you start exploring, so you can't
-// scout on Easy and then lock in on Hard.
-let difficultyLocked = false;
-
+// You start on Hard and can switch to an easier map at any point before
+// locking in (for fewer points), but never back to a harder one.
 function renderDifficulty() {
   for (const btn of document.querySelectorAll<HTMLButtonElement>("#difficulty button")) {
     const d = btn.dataset.d as Difficulty;
     btn.setAttribute("aria-pressed", String(d === difficulty));
-    // Within an attempt you can make the map easier (for fewer points) but never
-    // harder again. Outside test mode the choice also locks once you move the map.
     const harder = DIFFICULTY_ORDER.indexOf(d) > DIFFICULTY_ORDER.indexOf(difficulty);
-    btn.disabled = d !== difficulty && (difficultyLocked || harder);
+    btn.disabled = d !== difficulty && harder;
   }
   const info = DIFFICULTIES[difficulty];
-  // "Land, lakes and rivers only · ×1.2 points". On phones, once the buttons
-  // are hidden (.diff-locked in CSS), the name replaces the blurb:
-  // "Hard · ×1.2 points · locked for today".
-  const span = (cls: string, text: string) => Object.assign(document.createElement("span"), { className: cls, textContent: text });
-  const rest = t("diffInfo", { blurb: "", mult: info.multiplier, locked: difficultyLocked ? 1 : "" });
-  $("difficulty-info").replaceChildren(span("diff-name", info.label), span("diff-blurb", info.blurb), rest);
-  document.body.classList.toggle("diff-locked", difficultyLocked);
+  // "Land, lakes and rivers only · ×1.2 points"
+  $("difficulty-info").textContent = t("diffInfo", { blurb: info.blurb, mult: info.multiplier, locked: "" });
 }
 
 const SKIP_CONFIRM_KEY = "mapringer:skip-easier-confirm";
@@ -450,10 +453,11 @@ function confirmEasier(to: Difficulty): Promise<boolean> {
 
 $("difficulty").addEventListener("click", async (e) => {
   const d = (e.target as HTMLElement).closest<HTMLButtonElement>("button")?.dataset.d as Difficulty | undefined;
-  if (!d || d === difficulty || difficultyLocked) return;
+  if (!d || d === difficulty) return;
   if (DIFFICULTY_ORDER.indexOf(d) > DIFFICULTY_ORDER.indexOf(difficulty)) return; // no going back up
-  if (!(await confirmEasier(d)) || difficultyLocked || locked) return;
+  if (!(await confirmEasier(d)) || locked) return;
   difficulty = d;
+  if (!UNLIMITED) savePuzzleDifficulty(puzzle.number, d);
   applyMapStyle(map, d, LANG, gameLayers);
   renderDifficulty();
   refreshHints();
@@ -462,10 +466,6 @@ $("difficulty").addEventListener("click", async (e) => {
 map.on("movestart", (e) => {
   if (locked || !(e as { originalEvent?: Event }).originalEvent) return;
   document.body.classList.add("explored");
-  if (!UNLIMITED && !difficultyLocked) {
-    difficultyLocked = true;
-    renderDifficulty();
-  }
 });
 renderDifficulty();
 
@@ -947,7 +947,6 @@ function resetPlay() {
   setAnswerLine("hide");
   setCenters([]);
   // every new attempt starts back on Hard
-  difficultyLocked = false;
   document.body.classList.remove("explored");
   if (difficulty !== "hard" || revealed) {
     difficulty = "hard";

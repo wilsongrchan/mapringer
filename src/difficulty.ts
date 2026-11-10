@@ -165,19 +165,24 @@ export function applyMapStyle(map: maplibregl.Map, d: Difficulty, lang: Lang, ga
   return swapStyle(map, url, transform, lang, game, diff);
 }
 
-export function loadDifficulty(): Difficulty {
+/**
+ * The map chosen for a daily puzzle. You can only ever switch to an easier
+ * map, so it's remembered per puzzle: reloading can't put you back on Hard
+ * after scouting on Easy.
+ */
+export function loadPuzzleDifficulty(puzzle: number): Difficulty | null {
   try {
-    const d = localStorage.getItem("mapringer:difficulty");
+    const d = localStorage.getItem(`mapringer:difficulty:${puzzle}`);
     if (d === "easy" || d === "standard" || d === "hard") return d;
   } catch {
     /* storage unavailable */
   }
-  return "standard";
+  return null;
 }
 
-export function saveDifficulty(d: Difficulty): void {
+export function savePuzzleDifficulty(puzzle: number, d: Difficulty): void {
   try {
-    localStorage.setItem("mapringer:difficulty", d);
+    localStorage.setItem(`mapringer:difficulty:${puzzle}`, d);
   } catch {
     /* storage unavailable */
   }

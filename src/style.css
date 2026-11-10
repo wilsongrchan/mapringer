@@ -948,13 +948,6 @@ dialog {
   pointer-events: none;
 }
 
-/* name shown before the difficulty blurb once the picker is hidden (phones) */
-.diff-name {
-  display: none;
-  font-weight: 600;
-  color: var(--fg);
-}
-
 /* ---- phones: smaller panels so the map gets most of the screen ---- */
 @media (max-width: 799px) {
   :root {
@@ -1045,17 +1038,9 @@ dialog {
     display: none;
   }
 
-  /* outside test mode the map choice locks on the first move: drop the
-     (disabled) buttons and keep a one-line "Hard · … · locked" note */
-  .diff-locked .difficulty {
-    display: none;
-  }
-
-  .diff-locked .diff-name {
-    display: inline;
-  }
-
-  .diff-locked .diff-blurb {
+  /* once you're moving the map, keep the buttons (you can still switch to an
+     easier map) but drop the one-line description under them */
+  .explored .difficulty-info {
     display: none;
   }
 
