@@ -1,8 +1,9 @@
 """Build the country mask and map hints for "centre your ring in <country>" quests.
 
 Only the countries listed in src/countries.json are drawn; cell value = the
-country's 1-based position in that list, 0 = anywhere else (or sea). Same
-1 arc-minute grid as land.tif.
+country's 1-based position in that list, 0 = anywhere else (or sea). An entry's
+"also" list folds other Natural Earth areas into it (China includes Hong Kong
+and Macao). Same 1 arc-minute grid as land.tif.
 
 Outputs:
   <dst_tif>                       uint8 Cloud-Optimized GeoTIFF (host it with the other .tif files)
@@ -26,6 +27,7 @@ from rasterio.features import rasterize
 from rasterio.shutil import copy as rio_copy
 from rasterio.transform import from_origin
 from shapely.geometry import mapping, shape
+from shapely.ops import unary_union
 
 RES = 1 / 60
 W, H = 360 * 60, 180 * 60
@@ -36,32 +38,39 @@ MIN_AREA_DEG2 = 0.002
 
 def main(src_dir: str, list_path: str, dst_tif: str, hints_dir: str) -> None:
     countries = json.load(open(Path(src_dir) / "ne_10m_admin_0_countries.geojson"))
-    wanted = [c["id"] for c in json.load(open(list_path))]
-    index = {iso: i + 1 for i, iso in enumerate(wanted)}
-    assert len(wanted) < 256
+    entries = json.load(open(list_path))
+    assert len(entries) < 256
+    index = {}  # Natural Earth ADM0_A3 -> (mask value, entry id)
+    for i, c in enumerate(entries):
+        for iso in [c["id"], *c.get("also", [])]:
+            index[iso] = (i + 1, c["id"])
 
     shapes = []
-    hints = Path(hints_dir)
-    hints.mkdir(parents=True, exist_ok=True)
+    geoms = {c["id"]: [] for c in entries}
     for f in countries["features"]:
         iso = f["properties"]["ADM0_A3"]
         if iso not in index:
             continue
-        shapes.append((f["geometry"], index[iso]))
-        g = shape(f["geometry"]).simplify(SIMPLIFY_DEG, preserve_topology=True)
-        parts = [p for p in getattr(g, "geoms", [g]) if p.area >= MIN_AREA_DEG2] or list(getattr(g, "geoms", [g]))
-        g = parts[0] if len(parts) == 1 else type(g)(parts) if hasattr(g, "geoms") else g
-        geo = json.loads(json.dumps(mapping(g)), parse_float=lambda x: round(float(x), 3))
-        out = {"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"continent": "country"}, "geometry": geo}]}
-        (hints / f"{iso}.geojson").write_text(json.dumps(out, separators=(",", ":")))
+        value, entry = index[iso]
+        shapes.append((f["geometry"], value))
+        geoms[entry].append(shape(f["geometry"]))
 
-    found = {iso for _, v in shapes for iso, i in index.items() if i == v}
-    missing = [iso for iso in wanted if iso not in found]
+    missing = [iso for iso in index if iso not in {f["properties"]["ADM0_A3"] for f in countries["features"]}]
     assert not missing, f"not in Natural Earth: {missing}"
 
+    hints = Path(hints_dir)
+    hints.mkdir(parents=True, exist_ok=True)
+    for entry, gs in geoms.items():
+        g = unary_union(gs).simplify(SIMPLIFY_DEG, preserve_topology=True)
+        parts = [p for p in getattr(g, "geoms", [g]) if p.area >= MIN_AREA_DEG2] or list(getattr(g, "geoms", [g]))
+        g = unary_union(parts)
+        geo = json.loads(json.dumps(mapping(g)), parse_float=lambda x: round(float(x), 3))
+        out = {"type": "FeatureCollection", "features": [{"type": "Feature", "properties": {"continent": "country"}, "geometry": geo}]}
+        (hints / f"{entry}.geojson").write_text(json.dumps(out, separators=(",", ":")))
+
     mask = rasterize(shapes, out_shape=(H, W), transform=TRANSFORM, fill=0, dtype="uint8")
-    for iso, i in index.items():
-        print(f"{i:3d} {iso} cells={(mask == i).sum():,}")
+    for i, c in enumerate(entries):
+        print(f"{i + 1:3d} {c['id']} cells={(mask == i + 1).sum():,}")
 
     dst = Path(dst_tif)
     with tempfile.TemporaryDirectory(dir=dst.parent) as tmp:

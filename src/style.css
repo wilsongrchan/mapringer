@@ -527,8 +527,21 @@ dialog ol {
   margin-top: 2px;
 }
 
-.answer-line .place {
-  margin-top: 2px;
+/* where the closest correct ring is, under the target (a small green ring, like the answer ring) */
+.answer-place {
+  position: relative;
+  padding-left: 16px;
+}
+
+.answer-place::before {
+  content: "";
+  position: absolute;
+  left: 1px;
+  top: 0.32em;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  border: 2px solid var(--good);
 }
 
 .score-row .bar,

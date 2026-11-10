@@ -345,8 +345,10 @@ describe.skipIf(!existsSync(COUNTRY_TIF))("country quests on the real country ma
     expect(await countryOf({ lat: 38.71, lng: -9.14 })).toBe(null); // Lisbon: Portugal isn't either
     expect(await countryOf({ lat: 35.68, lng: 139.77 })).toBe("JPN"); // Tokyo, on the coast
     expect(await countryOf({ lat: 0, lng: -30 })).toBe(null); // mid-Atlantic
-    // Natural Earth draws Hong Kong separately from China
+    // the quest is "Mainland China": Hong Kong and Macau don't count
     expect(await countryOf({ lat: 22.32, lng: 114.17 })).toBe(null);
+    expect(await countryOf({ lat: 22.19, lng: 113.54 })).toBe(null);
+    expect(await countryOf({ lat: 25.03, lng: 121.56 })).toBe(null); // Taipei: Taiwan isn't on the list
     expect(await countryOf({ lat: 23.13, lng: 113.26 })).toBe("CHN"); // Guangzhou
   });
 

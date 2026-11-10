@@ -801,6 +801,7 @@ function showResult(r: Result, animate: boolean) {
     if (myAttempt === attempt) fitRings([{ center, radiusKm: puzzle.radiusKm * 1.3 }], animate ? 800 : 0);
   });
 
+  $("answer-place").hidden = true;
   if (r.accuracy >= MATCH_ACCURACY) {
     setAnswerLine("found");
     return;
@@ -855,15 +856,17 @@ function showAnswer(r: Result, res: AnswerResult, animate: boolean) {
     return;
   }
   const where = t("away", { km: fmt(a.distanceKm) });
-  // "Closest ring: 4 km away, in Hong Kong." (the place name fills in when the lookup returns)
-  const place = `<span id="answer-place"></span>${t("endStop")}`;
-  setAnswerLine(
-    "found",
-    res.answer
-      ? t("closest", { km: fmt(a.distanceKm) }) + place
-      : t("noHit", { km: fmt(res.searchedKm), pop: fmt(a.population), acc: a.accuracy.toFixed(1), where }) + place,
-  );
-  showPlace($("answer-place"), a.center, attempt, "");
+  if (res.answer) {
+    // a correct ring exists: say where, under the target ("4 km away · Hong Kong")
+    setAnswerLine("hide");
+    const el = $("answer-place");
+    el.hidden = false;
+    showPlace(el, a.center, attempt, `${where} · `);
+  } else {
+    // nothing hits the target nearby: that needs a sentence
+    setAnswerLine("found", t("noHit", { km: fmt(res.searchedKm), pop: fmt(a.population), acc: a.accuracy.toFixed(1), where }) + `<span id="nohit-place"></span>${t("endStop")}`);
+    showPlace($("nohit-place"), a.center, attempt, "");
+  }
   setData("answer", circleFeature(a.center, puzzle.radiusKm));
   setCenters([
     { kind: "mine", at: { lng: r.lng, lat: r.lat } },

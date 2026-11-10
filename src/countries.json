@@ -29,7 +29,7 @@
   { "id": "PAK", "en": "Pakistan", "zh": "巴基斯坦" },
   { "id": "IND", "en": "India", "zh": "印度" },
   { "id": "BGD", "en": "Bangladesh", "zh": "孟加拉" },
-  { "id": "CHN", "en": "China", "zh": "中國" },
+  { "id": "CHN", "en": "Mainland China", "zh": "中國內地" },
   { "id": "JPN", "en": "Japan", "zh": "日本" },
   { "id": "KOR", "en": "South Korea", "zh": "南韓" },
   { "id": "PHL", "en": "the Philippines", "zh": "菲律賓" },
