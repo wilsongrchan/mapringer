@@ -467,3 +467,14 @@ describe("elevation tiles", async () => {
       }
   });
 });
+
+describe("sample rings for quests", async () => {
+  const { questAnchors, questFor } = await import("../src/quests");
+  it("every quest the game can pick has places to search from", () => {
+    for (let n = 1; n < 1500; n++)
+      for (const st of [1, 2] as Stage[]) {
+        const q = questFor(ringFor(n, st))!;
+        expect(questAnchors(q, { lat: 51.5, lng: -0.1 }).length, JSON.stringify(q)).toBeGreaterThan(0);
+      }
+  });
+});

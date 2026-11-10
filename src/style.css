@@ -352,8 +352,13 @@ dialog ol {
 
 /* test mode: Share, Try again and New puzzle share one row */
 .actions button {
-  flex: 1;
+  flex: 1 1 0;
+  min-width: 0; /* share the row instead of pushing past the panel's edge */
+  padding-left: 8px;
+  padding-right: 8px;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* ---- off-by gauge ---- */
@@ -951,6 +956,26 @@ dialog {
   margin: -6px 0 10px;
   font-size: 14px;
   color: var(--muted);
+}
+
+/* the quest's sample ring (gold on the map) */
+.quest-answer {
+  margin: -4px 0 10px;
+  font-size: 13px;
+  color: #8a6100;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quest-answer.searching {
+  color: var(--muted);
+}
+
+@media (prefers-color-scheme: dark) {
+  .quest-answer {
+    color: #e0b84a;
+  }
 }
 
 .quest-result.done {

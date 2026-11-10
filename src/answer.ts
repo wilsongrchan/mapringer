@@ -24,6 +24,7 @@ const searchSteps = (radiusKm: number) =>
   SEARCH_STEPS_KM.map((s) => Math.min(5000, s * Math.max(1, radiusKm / 100)));
 const MAX_CANDIDATES = 300_000; // approximate evaluations per block
 const MAX_EXACT = 150; // exact evaluations per block
+const MAX_CHECKED = 12; // matches per block offered to an `accept` check
 
 /**
  * Find the ring closest to `player` whose population is within ~2% of `target`.
@@ -34,13 +35,22 @@ export async function findClosestAnswer(
   radiusKm: number,
   target: number,
   readBlock: (center: LngLat, radiusKm: number, ringKm: number) => Promise<Block>,
+  /** Only accept rings that also pass this check (e.g. the quest); tried on a few matches per area. */
+  accept?: (center: LngLat) => Promise<boolean>,
+  /** Search only the first this-many (widening) areas. */
+  maxSteps = 3,
 ): Promise<AnswerResult> {
   let searchedKm = 0;
   let best: Answer | null = null;
-  for (const searchKm of searchSteps(radiusKm)) {
+  for (const searchKm of searchSteps(radiusKm).slice(0, maxSteps)) {
     const block = await readBlock(player, searchKm + radiusKm, radiusKm);
     searchedKm = searchKm;
-    const found = searchBlock(block, player, radiusKm, target, searchKm);
+    const found = searchBlock(block, player, radiusKm, target, searchKm, accept ? MAX_CHECKED : 1);
+    if (accept) {
+      for (const m of found.matches) if (await accept(m.center)) return { answer: m, best: null, searchedKm };
+      await new Promise((r) => setTimeout(r, 0));
+      continue;
+    }
     if (found.match) return { answer: found.match, best: null, searchedKm };
     if (found.best && (!best || found.best.accuracy > best.accuracy)) best = found.best;
     await new Promise((r) => setTimeout(r, 0)); // let the UI breathe between steps
@@ -59,9 +69,11 @@ export function searchBlock(
   radiusKm: number,
   target: number,
   searchKm: number,
-): { match: Answer | null; best: Answer | null } {
+  /** Collect up to this many separate matches (nearest first) instead of stopping at the first. */
+  maxMatches = 1,
+): { match: Answer | null; best: Answer | null; matches: Answer[] } {
   const { grid, rows, cols, values } = block;
-  if (!rows || !cols) return { match: null, best: null };
+  if (!rows || !cols) return { match: null, best: null, matches: [] };
   const res = grid.res;
   const dyKm = res * KM_PER_DEG;
 
@@ -109,22 +121,27 @@ export function searchBlock(
   candidates.sort((a, b) => a.d - b.d);
 
   let exactChecks = 0;
+  const matches: Answer[] = [];
   for (const cand of candidates) {
     if (exactChecks++ >= MAX_EXACT) break;
     const start = { lat: cand.lat, lng: cand.lng };
+    // spread the matches out: skip candidates right next to one already found
+    if (matches.some((m) => haversineKm(m.center, start) < radiusKm)) continue;
     const pop = sumCircleBlock(block, start, radiusKm);
     if (accuracy(pop, target) < 90) continue;
     const best = refine(block, start, pop, radiusKm, target);
     if (best.accuracy >= MATCH_ACCURACY) {
-      return { match: { ...best, distanceKm: haversineKm(player, best.center) }, best: null };
+      matches.push({ ...best, distanceKm: haversineKm(player, best.center) });
+      if (matches.length >= maxMatches) break;
     }
   }
+  if (matches.length) return { match: matches[0], best: null, matches };
 
   // No match: report the ring that got closest to the target instead.
-  if (bestApprox.acc <= 0) return { match: null, best: null };
+  if (bestApprox.acc <= 0) return { match: null, best: null, matches };
   const start = { lat: bestApprox.lat, lng: bestApprox.lng };
   const b = refine(block, start, sumCircleBlock(block, start, radiusKm), radiusKm, target);
-  return { match: null, best: { ...b, distanceKm: haversineKm(player, b.center) } };
+  return { match: null, best: { ...b, distanceKm: haversineKm(player, b.center) }, matches };
 }
 
 /** Hill-climb the ring centre to get as close to the target as possible. */

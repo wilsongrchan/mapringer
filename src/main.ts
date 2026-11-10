@@ -7,11 +7,11 @@ import "./style.css";
 import { applyStaticText, LANG, people, switchLanguage, t } from "./i18n";
 import { findClosestAnswer, MATCH_ACCURACY, type AnswerResult } from "./answer";
 import { applyMapStyle, applyRevealStyle, DIFFICULTIES, GLOBE, prefetchStyles, type Difficulty, type GameLayers } from "./difficulty";
-import { circleRing, type LngLat } from "./geo";
+import { circleRing, haversineKm, type LngLat } from "./geo";
 import { coords, placeName } from "./places";
 import { CITIES } from "./cities";
 import { highestInRing } from "./elevation";
-import { COUNTRIES, countryAt, questDone, questFor, surveyRing, TROPIC_LAT, type Quest } from "./quests";
+import { COUNTRIES, countryAt, GEOMETRY_ONLY, questAnchors, questDone, questFor, surveyRing, TROPIC_LAT, type Quest } from "./quests";
 import { populationInRing, preloadPopulation, readBlock, readCountryBlock, readLandBlock } from "./population";
 import {
   accuracy,
@@ -67,7 +67,10 @@ const carried: CarryOver | null = (() => {
 })();
 const carriedTest = UNLIMITED ? carried?.test : undefined;
 
-let day = carriedTest?.day ?? (dayParam > 0 ? dayParam : todaysNumber());
+// the test site starts on a random day each visit (?day=N picks one, e.g. today's)
+const randomDay = () => 1000 + Math.floor(Math.random() * 1e9);
+const startRandom = UNLIMITED && !(dayParam > 0);
+let day = carriedTest?.day ?? (dayParam > 0 ? dayParam : startRandom ? randomDay() : todaysNumber());
 let rings = dayRings(day);
 let results: (Result | null)[] = carriedTest?.results ?? ([0, 1, 2] as Stage[]).map((st) => (UNLIMITED ? null : loadResult(day, st)));
 /** The first ring not played yet (or the last ring once the day is done). */
@@ -77,10 +80,10 @@ function nextStage(): Stage {
 }
 let stage: Stage = carriedTest?.stage ?? nextStage();
 let puzzle: Puzzle = rings[stage];
-let practice = carriedTest?.practice ?? false; // true once we've moved on to random days
+let practice = carriedTest?.practice ?? startRandom; // true once we've moved on to random days
 const dayDone = () => results.every(Boolean);
 
-const COLOR = { ring: "#e4572e", good: "#2a9d8f" };
+const COLOR = { ring: "#e4572e", good: "#2a9d8f", quest: "#c48a00" };
 /** Side-quest hint colours, one per continent (so where two meet is easy to see). */
 const CONTINENT_COLOR = [
   "match",
@@ -320,6 +323,7 @@ function circleFeature(center: LngLat, radiusKm: number): Feature {
 
 function setData(source: string, data: Feature | typeof EMPTY) {
   if (source === "answer") answerData = data;
+  if (source === "quest-answer") questAnswerData = data;
   if (source === "ring") ringData = data;
   (map.getSource(source) as maplibregl.GeoJSONSource | undefined)?.setData(data);
 }
@@ -350,12 +354,16 @@ function updateRing() {
 }
 
 let answerData: Feature | typeof EMPTY = EMPTY;
+let questAnswerData: Feature | typeof EMPTY = EMPTY; // a sample ring that does the quest
 let ringData: Feature | typeof EMPTY = EMPTY;
 type PointFC = { type: "FeatureCollection"; features: { type: "Feature"; properties: { kind: string }; geometry: { type: "Point"; coordinates: [number, number] } }[] };
 let centerData: PointFC = { type: "FeatureCollection", features: [] };
 
-/** Centre dots for the locked-in ring and the answer ring. */
-function setCenters(points: { kind: "mine" | "answer"; at: LngLat }[]) {
+/** Centre dots for the locked-in ring, the answer ring and the quest's sample ring. */
+type CenterKind = "mine" | "answer" | "quest";
+let centerPoints: { kind: CenterKind; at: LngLat }[] = [];
+function setCenters(points: { kind: CenterKind; at: LngLat }[]) {
+  centerPoints = points;
   centerData = {
     type: "FeatureCollection",
     features: points.map((p) => ({
@@ -374,6 +382,7 @@ const gameLayers: GameLayers = () => ({
   sources: {
     ring: { type: "geojson", data: ringData },
     answer: { type: "geojson", data: answerData },
+    "quest-answer": { type: "geojson", data: questAnswerData },
     "quest-lines": { type: "geojson", data: questLines() },
     "quest-areas": { type: "geojson", data: areasData },
     centers: { type: "geojson", data: centerData },
@@ -399,6 +408,13 @@ const gameLayers: GameLayers = () => ({
       type: "line",
       source: "answer",
       paint: { "line-color": COLOR.good, "line-width": 3, "line-dasharray": [2, 1.5] },
+    },
+    { id: "quest-answer-fill", type: "fill", source: "quest-answer", paint: { "fill-color": COLOR.quest, "fill-opacity": 0.13 } },
+    {
+      id: "quest-answer-line",
+      type: "line",
+      source: "quest-answer",
+      paint: { "line-color": COLOR.quest, "line-width": 3, "line-dasharray": [1, 1.2] },
     },
     { id: "ring-line", type: "line", source: "ring", paint: { "line-color": COLOR.ring, "line-width": 3 } },
     // the equator, drawn when today's side quest is to cross it
@@ -428,7 +444,7 @@ const gameLayers: GameLayers = () => ({
       source: "centers",
       paint: {
         "circle-radius": 6,
-        "circle-color": ["match", ["get", "kind"], "answer", COLOR.good, COLOR.ring],
+        "circle-color": ["match", ["get", "kind"], "answer", COLOR.good, "quest", COLOR.quest, COLOR.ring],
         "circle-stroke-color": "#ffffff",
         "circle-stroke-width": 2.5,
       },
@@ -548,6 +564,12 @@ function verdict(r: Result): string {
 let lastBounds: maplibregl.LngLatBounds | null = null;
 
 /** Frame the given rings in the part of the map the panels don't cover. */
+/** Frame the locked ring plus whichever answer rings are shown. */
+function fitShown(duration: number) {
+  const rings = centerPoints.map((p) => ({ center: p.at, radiusKm: puzzle.radiusKm }));
+  if (rings.length) fitRings(rings, duration);
+}
+
 function fitRings(rings: { center: LngLat; radiusKm: number }[], duration: number) {
   lastBounds = boundsOf(rings);
   map.fitBounds(lastBounds, { padding: padding(), duration, maxZoom: 13 });
@@ -844,16 +866,44 @@ function showResult(r: Result, animate: boolean) {
     if (myAttempt === attempt) fitRings([{ center, radiusKm: puzzle.radiusKm * 1.3 }], animate ? 800 : 0);
   });
 
+  // The green ring is the player's own (if it hit the target) or the closest
+  // one that does. If that ring doesn't also do the quest, find the closest
+  // ring that hits the target AND does the quest, and show it in gold.
+  const q = quest;
+  const qa = $("quest-answer");
+  if (q) {
+    qa.hidden = false;
+    qa.classList.add("searching");
+    qa.textContent = t("questSearching");
+  }
+  const questCheck = (greenDone: Promise<boolean>) => {
+    if (!q) return;
+    greenDone
+      .catch(() => false)
+      .then((ok) => {
+        if (myAttempt !== attempt) return;
+        if (ok) qa.hidden = true;
+        else findQuestAnswer(r, q, myAttempt, animate);
+      });
+  };
+
   if (r.accuracy >= MATCH_ACCURACY) {
     setAnswerLine("found");
+    questCheck(Promise.resolve(!!r.questDone));
     return;
   }
   setAnswerLine("searching");
   findClosestAnswer(center, puzzle.radiusKm, puzzle.target, readBlock)
-    .then((res) => myAttempt === attempt && showAnswer(r, res, animate))
+    .then((res) => {
+      if (myAttempt !== attempt) return;
+      showAnswer(r, res, animate);
+      // (a best miss isn't a correct ring, so the quest still gets its own)
+      questCheck(q && res.answer ? questOkAt(q, res.answer.center) : Promise.resolve(false));
+    })
     .catch((e) => {
       console.error(e);
       if (myAttempt === attempt) setAnswerLine("error");
+      questCheck(Promise.resolve(false));
     });
 }
 
@@ -907,17 +957,62 @@ function showAnswer(r: Result, res: AnswerResult, animate: boolean) {
   setAnswerLine("found");
   showPlace($("answer-place"), a.center, attempt, res.answer ? `${where} · ` : t("noHit", { acc: a.accuracy.toFixed(1), where }));
   setData("answer", circleFeature(a.center, puzzle.radiusKm));
-  setCenters([
-    { kind: "mine", at: { lng: r.lng, lat: r.lat } },
-    { kind: "answer", at: a.center },
-  ]);
-  const rings = [
-    { center: { lng: r.lng, lat: r.lat }, radiusKm: puzzle.radiusKm },
-    { center: a.center, radiusKm: puzzle.radiusKm },
-  ];
+  setCenters([...centerPoints.filter((p) => p.kind !== "answer"), { kind: "answer", at: a.center }]);
   const myAttempt = attempt;
   revealDone.then(() => {
-    if (myAttempt === attempt) fitRings(rings, animate ? 1200 : 0);
+    if (myAttempt === attempt) fitShown(animate ? 1200 : 0);
+  });
+}
+
+/** Does a ring here do the quest? (Reads the land / country / height data it needs.) */
+async function questOkAt(q: Quest, center: LngLat): Promise<boolean> {
+  const r = puzzle.radiusKm;
+  const blank = { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, continents: new Set<never>(), seaShare: 0 };
+  if (GEOMETRY_ONLY.has(q.kind)) return questDone(q, blank, center, r);
+  if (q.kind === "country") return questDone(q, blank, center, r, countryAt(await readCountryBlock(center, 3), center));
+  if (q.kind === "high") return questDone(q, blank, center, r, null, await highestInRing(center, r));
+  return questDone(q, surveyRing(await readLandBlock(center, r), center, r), center, r);
+}
+
+/**
+ * When the quest wasn't done: find a sample ring that hits the target (within
+ * 5%) and does the quest, searching around the player's ring first, then
+ * around places that suit the quest (nearest first).
+ */
+async function findQuestAnswer(r: Result, q: Quest, myAttempt: number, animate: boolean) {
+  const el = $("quest-answer");
+  el.hidden = false;
+  el.classList.add("searching");
+  el.textContent = t("questSearching");
+  const player = { lng: r.lng, lat: r.lat };
+  const origins = [player, ...questAnchors(q, player)].slice(0, 5);
+  let found: LngLat | null = null;
+  try {
+    for (const [i, origin] of origins.entries()) {
+      // right around the player's ring first (just the nearest area), then the quest's places
+      const accept = (c: LngLat) => questOkAt(q, c).catch(() => false);
+      const res = await findClosestAnswer(origin, puzzle.radiusKm, puzzle.target, readBlock, accept, i === 0 ? 1 : 3);
+      if (myAttempt !== attempt) return;
+      if (res.answer) {
+        found = res.answer.center;
+        break;
+      }
+    }
+  } catch (e) {
+    console.error(e);
+  }
+  if (myAttempt !== attempt) return;
+  el.classList.remove("searching");
+  if (!found) {
+    el.textContent = t("questNoSample");
+    return;
+  }
+  const where = t("away", { km: fmt(haversineKm(player, found)) });
+  showPlace(el, found, myAttempt, `${t("questSample")}${where} · `);
+  setData("quest-answer", circleFeature(found, puzzle.radiusKm));
+  setCenters([...centerPoints.filter((p) => p.kind !== "quest"), { kind: "quest", at: found }]);
+  revealDone.then(() => {
+    if (myAttempt === attempt) fitShown(animate ? 1200 : 0);
   });
 }
 
@@ -976,6 +1071,8 @@ function resetPlay() {
   lockBtn.classList.remove("counting");
   lockBtn.setAttribute("aria-label", t("lockIn"));
   setData("answer", EMPTY);
+  setData("quest-answer", EMPTY);
+  $("quest-answer").hidden = true;
   setAnswerLine("hide");
   setCenters([]);
   document.body.classList.remove("explored");
@@ -1012,7 +1109,7 @@ $("again-btn").addEventListener("click", () => {
 });
 $("new-btn").addEventListener("click", () => {
   practice = true;
-  day = 1000 + Math.floor(Math.random() * 1e9);
+  day = randomDay();
   rings = dayRings(day);
   results = [null, null, null];
   startRing(0);

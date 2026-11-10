@@ -97,6 +97,60 @@ export function questFor(p: Puzzle): Quest | null {
   return pick(pool);
 }
 
+/** [lat, lng] shorthand for the anchor lists below. */
+type At = [number, number];
+const at = ([lat, lng]: At): LngLat => ({ lat, lng });
+
+/** A big city in each quest country, to start a search for a ring there. */
+const COUNTRY_ANCHOR: Record<string, At> = {
+  USA: [41.88, -87.63], CAN: [43.65, -79.38], MEX: [19.43, -99.13], BRA: [-23.55, -46.63], ARG: [-34.6, -58.38],
+  COL: [4.71, -74.07], PER: [-12.05, -77.04], CHL: [-33.45, -70.67], GBR: [51.51, -0.13], FRA: [48.86, 2.35],
+  DEU: [52.52, 13.4], ITA: [41.9, 12.5], ESP: [40.42, -3.7], NLD: [52.37, 4.9], POL: [52.23, 21.01],
+  UKR: [50.45, 30.52], RUS: [55.76, 37.62], TUR: [39.93, 32.86], EGY: [30.04, 31.24], MAR: [33.57, -7.59],
+  NGA: [6.52, 3.38], ETH: [9.03, 38.74], KEN: [-1.29, 36.82], COD: [-4.32, 15.31], ZAF: [-26.2, 28.05],
+  SAU: [24.71, 46.68], IRN: [35.69, 51.39], PAK: [31.55, 74.34], IND: [28.61, 77.21], BGD: [23.81, 90.41],
+  CHN: [39.9, 116.41], JPN: [35.68, 139.65], KOR: [37.57, 126.98], PHL: [14.6, 120.98], VNM: [21.03, 105.85],
+  THA: [13.76, 100.5], MYS: [3.14, 101.69], IDN: [-6.21, 106.85], AUS: [-33.87, 151.21],
+};
+const CONTINENT_ANCHORS: Record<Continent, At[]> = {
+  africa: [[6.52, 3.38], [30.04, 31.24], [-1.29, 36.82], [-26.2, 28.05]],
+  asia: [[28.61, 77.21], [31.23, 121.47], [23.81, 90.41], [35.68, 139.65]],
+  europe: [[48.86, 2.35], [52.52, 13.4], [41.9, 12.5], [55.76, 37.62]],
+  northAmerica: [[40.71, -74.01], [19.43, -99.13], [34.05, -118.24], [41.88, -87.63]],
+  southAmerica: [[-23.55, -46.63], [4.71, -74.07], [-34.6, -58.38], [-12.05, -77.04]],
+  oceania: [[-33.87, 151.21], [-37.81, 144.96], [-27.47, 153.03], [-36.85, 174.76]],
+};
+const KIND_ANCHORS: Partial<Record<Quest["kind"], At[]>> = {
+  landlocked: [[40.42, -3.7], [28.61, 77.21], [55.76, 37.62], [19.43, -99.13], [-1.29, 36.82], [4.71, -74.07]],
+  islandsOnly: [[-6.21, 106.85], [35.68, 139.65], [14.6, 120.98], [25.03, 121.56], [6.93, 79.86], [23.11, -82.37], [-36.85, 174.76]],
+  twoContinents: [[41.01, 28.98], [30.6, 32.3], [36.0, -5.6], [12.6, 43.4], [8.0, -77.5]],
+  equator: [[0.35, 32.58], [-0.18, -78.47], [-0.03, 109.33], [0.39, 9.45], [0.03, -51.07]],
+  southOfCapricorn: [[-26.2, 28.05], [-25.43, -49.27], [-34.6, -58.38], [-33.45, -70.67], [-33.87, 151.21], [-33.92, 18.42]],
+  northOfCancer: [[51.51, -0.13], [48.86, 2.35], [39.9, 116.41], [35.68, 139.65], [40.71, -74.01], [28.61, 77.21]],
+  tropics: [[6.52, 3.38], [19.08, 72.88], [-6.21, 106.85], [14.6, 120.98], [13.76, 100.5], [4.71, -74.07], [-4.32, 15.31]],
+  west: [[40.71, -74.01], [19.43, -99.13], [4.71, -74.07], [-23.55, -46.63], [41.88, -87.63], [33.57, -7.59]],
+  east: [[28.61, 77.21], [31.23, 121.47], [6.52, 3.38], [52.52, 13.4], [30.04, 31.24], [-6.21, 106.85]],
+  high: [[45.07, 7.69], [47.27, 11.39], [4.71, -74.07], [19.43, -99.13], [9.03, 38.74], [-0.18, -78.47], [-16.5, -68.15], [27.7, 85.32], [35.69, 51.39], [15.37, 44.19], [-1.29, 36.82], [39.74, -104.99]],
+};
+
+/**
+ * Places that suit a quest, to search from for a sample ring that does it
+ * (when the player's ring didn't). Nearest to `near` first.
+ */
+export function questAnchors(q: Quest, near: LngLat): LngLat[] {
+  let list: At[];
+  if (q.kind === "nearCity") {
+    const c = CITIES.find((c) => c.id === q.city);
+    list = c ? [[c.lat, c.lng]] : [];
+  } else if (q.kind === "country") list = COUNTRY_ANCHOR[q.country] ? [COUNTRY_ANCHOR[q.country]] : [];
+  else if (q.kind === "continent") list = CONTINENT_ANCHORS[q.continent];
+  else list = KIND_ANCHORS[q.kind] ?? [];
+  return list.map(at).sort((a, b) => haversineKm(near, a) - haversineKm(near, b));
+}
+
+/** Quests judged from the ring's position alone (no map data needed). */
+export const GEOMETRY_ONLY = new Set<Quest["kind"]>(["nearCity", "equator", "west", "east", "northOfCancer", "southOfCapricorn", "tropics"]);
+
 /** What the land mask says about the area inside a ring. */
 export interface RingSurface {
   center: number; // mask value at the ring centre
