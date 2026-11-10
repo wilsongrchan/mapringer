@@ -272,9 +272,59 @@ function setCollapsed(collapsed: boolean, refit = true) {
   $("result-toggle-label").textContent = t(collapsed ? "showResults" : "hideResults");
   if (refit && lastBounds) map.fitBounds(lastBounds, { padding: padding(), duration: 400, maxZoom: 13 });
 }
-$("result-toggle").addEventListener("click", () =>
-  setCollapsed(!$("result-panel").classList.contains("collapsed")),
-);
+// Tap the handle to toggle, or swipe it: down collapses, up expands. The panel
+// follows the finger while dragging and snaps on release.
+{
+  const toggle = $("result-toggle");
+  const panel = $("result-panel");
+  const SWIPE_PX = 40; // past this, a release counts as a swipe
+  const TAP_PX = 6; // under this, it was a tap
+  let startY: number | null = null;
+  let dy = 0;
+
+  const isCollapsed = () => panel.classList.contains("collapsed");
+
+  toggle.addEventListener("pointerdown", (e) => {
+    startY = e.clientY;
+    dy = 0;
+    toggle.setPointerCapture(e.pointerId);
+    panel.classList.add("dragging");
+  });
+
+  toggle.addEventListener("pointermove", (e) => {
+    if (startY === null) return;
+    dy = e.clientY - startY;
+    // expanded: follows the finger down (and resists going up);
+    // collapsed: a little stretch upwards hints that it will open
+    const shown = isCollapsed() ? Math.max(-60, Math.min(0, dy * 0.35)) : dy > 0 ? dy : dy * 0.2;
+    panel.style.transform = `translateY(${shown}px)`;
+  });
+
+  const finish = () => {
+    if (startY === null) return;
+    startY = null;
+    panel.classList.remove("dragging");
+    panel.style.transform = "";
+    if (Math.abs(dy) < TAP_PX) setCollapsed(!isCollapsed());
+    else if (dy > SWIPE_PX && !isCollapsed()) setCollapsed(true);
+    else if (dy < -SWIPE_PX && isCollapsed()) setCollapsed(false);
+  };
+  toggle.addEventListener("pointerup", finish);
+  toggle.addEventListener("pointercancel", () => {
+    dy = 0; // cancelled gestures don't toggle
+    if (startY !== null) {
+      startY = null;
+      panel.classList.remove("dragging");
+      panel.style.transform = "";
+    }
+  });
+
+  // Keyboard (Enter / Space) arrives as a click with detail 0; pointer taps
+  // were already handled on pointerup, so ignore their clicks.
+  toggle.addEventListener("click", (e) => {
+    if (e.detail === 0) setCollapsed(!isCollapsed());
+  });
+}
 
 function boundsOf(rings: { center: LngLat; radiusKm: number }[]) {
   const b = new maplibregl.LngLatBounds();

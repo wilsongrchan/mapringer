@@ -858,3 +858,17 @@ dialog {
 .lang-btn {
   font-size: 14px;
 }
+
+/* swipeable handle: the browser shouldn't scroll or zoom while dragging it */
+.result-toggle {
+  touch-action: none;
+  cursor: grab;
+}
+
+.result {
+  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.result.dragging {
+  transition: none;
+}
