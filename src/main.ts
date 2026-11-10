@@ -411,15 +411,41 @@ function renderDifficulty() {
   document.body.classList.toggle("diff-locked", difficultyLocked);
 }
 
-/** Switching to an easier map can't be undone for this ring, so ask first. */
+const SKIP_CONFIRM_KEY = "mapringer:skip-easier-confirm";
+
+/** Switching to an easier map can't be undone for this ring, so ask first (unless told not to). */
 function confirmEasier(to: Difficulty): Promise<boolean> {
+  try {
+    if (localStorage.getItem(SKIP_CONFIRM_KEY)) return Promise.resolve(true);
+  } catch {
+    /* storage unavailable: just ask */
+  }
   const dlg = $<HTMLDialogElement>("confirm-dialog");
+  const skip = $<HTMLInputElement>("confirm-skip");
+  skip.checked = false;
   const target = DIFFICULTIES[to];
   $("confirm-title").textContent = t("confirmEasierTitle", { to: target.label });
   $("confirm-body").textContent = t("confirmEasierBody", { blurb: target.blurb, mult: target.multiplier, from: DIFFICULTIES[difficulty].label });
   dlg.returnValue = "";
   dlg.showModal();
-  return new Promise((resolve) => dlg.addEventListener("close", () => resolve(dlg.returnValue === "ok"), { once: true }));
+  return new Promise((resolve) =>
+    dlg.addEventListener(
+      "close",
+      () => {
+        const ok = dlg.returnValue === "ok";
+        // "don't ask again" only sticks when they actually switch
+        if (ok && skip.checked) {
+          try {
+            localStorage.setItem(SKIP_CONFIRM_KEY, "1");
+          } catch {
+            /* storage unavailable */
+          }
+        }
+        resolve(ok);
+      },
+      { once: true },
+    ),
+  );
 }
 
 $("difficulty").addEventListener("click", async (e) => {
@@ -979,6 +1005,7 @@ $("help-btn").addEventListener("click", () => helpDialog.showModal());
   const video = $<HTMLVideoElement>("demo-video");
   const demo = $("demo");
   video.src = `${import.meta.env.BASE_URL}help/demo-${LANG}.mp4`;
+  $("demo-challenge").innerHTML = t("challengeLine", { target: people(6_500_000), radius: 20, article: "a" });
   video.poster = `${import.meta.env.BASE_URL}help/demo-${LANG}.jpg`;
   const sync = () => {
     const s = video.currentTime;

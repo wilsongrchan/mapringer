@@ -101,11 +101,13 @@
       </div>
 
       <div class="demo" id="demo" aria-hidden="true">
+        <!-- the demo's challenge: the real count for that 20 km ring is 6,556,463 -->
+        <div class="demo-challenge" id="demo-challenge"></div>
         <!-- recorded from the real game (scripts/record_demo.mjs); main.ts picks the language and syncs the overlay -->
         <video class="demo-video" id="demo-video" width="300" height="160" muted loop playsinline preload="none"></video>
         <div class="demo-ui">
           <span class="demo-btn" data-i18n="lockIn">Lock in ring</span>
-          <span class="demo-result" data-i18n-html="demoResult"><strong>49,800</strong> people · target 51,000 · <strong>100</strong> 🎯</span>
+          <span class="demo-result" data-i18n-html="demoResult"><strong>6,556,463</strong> people · <strong>100</strong> 🎯</span>
         </div>
       </div>
 
@@ -140,6 +142,7 @@
       <form method="dialog">
         <h2 id="confirm-title"></h2>
         <p class="small" id="confirm-body"></p>
+        <label class="dont-ask"><input type="checkbox" id="confirm-skip" /> <span data-i18n="dontAskAgain">Don't ask again</span></label>
         <div class="dialog-actions">
           <button value="cancel" data-i18n="cancel">Cancel</button>
           <button class="primary" value="ok" data-i18n="confirmSwitch">Switch</button>

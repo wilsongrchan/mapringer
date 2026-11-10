@@ -731,6 +731,25 @@ dialog {
   background: #0b111c;
 }
 
+/* the demo's challenge, like the game's question card */
+.demo-challenge {
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1;
+  padding: 4px 10px;
+  border-radius: 10px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.demo-challenge strong {
+  color: var(--accent);
+}
+
 .demo-ui {
   position: absolute;
   left: 8px;
@@ -1066,6 +1085,23 @@ dialog.confirm .small {
 
 dialog.confirm .dialog-actions button {
   flex: 1;
+}
+
+.dont-ask {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 14px;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.dont-ask input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
 }
 
 /* ---- phones: a more compact results panel ---- */

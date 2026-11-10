@@ -70,6 +70,7 @@ const en = {
   confirmEasierBody: (v: Vars) =>
     `${v.blurb}, for ×${v.mult} points. You can't switch back to ${v.from} for this ring.`,
   confirmSwitch: "Switch",
+  dontAskAgain: "Don't ask again",
   cancel: "Cancel",
 
   yourRing: "Your ring",
@@ -137,7 +138,7 @@ const en = {
 
   // help dialog
   howToPlay: "How to play",
-  demoResult: "<strong>49,800</strong> people · target 51,000 · <strong>100</strong> 🎯",
+  demoResult: "<strong>6,556,463</strong> people · <strong>100</strong> 🎯",
   step1: "Each day: one ring size, one target population.",
   step2: "Spin the globe and zoom in to put the ring over a place you think fits.",
   step3:
@@ -184,6 +185,7 @@ const zh: Record<Key, Entry> = {
   confirmEasierTitle: (v) => `轉到${v.to}地圖？`,
   confirmEasierBody: (v) => `${v.blurb}，分數 ×${v.mult}。這一題之後不能轉回${v.from}。`,
   confirmSwitch: "轉換",
+  dontAskAgain: "不再提示",
   cancel: "取消",
 
   yourRing: "你的圈",
@@ -249,7 +251,7 @@ const zh: Record<Key, Entry> = {
   shareTitle: (v) => `圈地家 #${v.n} · 半徑 ${v.radius} 公里${v.level}`,
 
   howToPlay: "玩法",
-  demoResult: "<strong>49,800</strong> 人 · 目標 51,000 · <strong>100</strong> 🎯",
+  demoResult: "<strong>6,556,463</strong> 人 · <strong>100</strong> 🎯",
   step1: "每天一題：一個圈的大小，一個目標人口。",
   step2: "轉動地球、放大地圖，把圈移到你認為人數剛好的地方。",
   step3: "鎖定圈圈。你只有<strong>一次</strong>機會，之後會顯示真實人數，以及最近的正確圈。",
