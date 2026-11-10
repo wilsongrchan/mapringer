@@ -48,6 +48,8 @@ body {
 #map {
   position: fixed;
   inset: 0;
+  /* space around the globe */
+  background: radial-gradient(circle at 50% 45%, #1b2638 0%, #0b111c 70%);
 }
 
 .card {
@@ -310,7 +312,7 @@ dialog ol {
 .toast {
   position: fixed;
   left: 50%;
-  bottom: calc(var(--safe-bottom) + 200px);
+  bottom: calc(var(--safe-bottom) + 16px + var(--bottom-h, 184px) + 12px);
   transform: translateX(-50%);
   background: var(--fg);
   color: var(--bg);
@@ -322,7 +324,7 @@ dialog ol {
 /* keep MapLibre's attribution clear of the bottom card */
 .maplibregl-ctrl-bottom-right,
 .maplibregl-ctrl-bottom-left {
-  bottom: calc(var(--safe-bottom) + 170px);
+  bottom: calc(var(--safe-bottom) + 16px + var(--bottom-h, 154px));
 }
 
 /* ---- answer + test mode ---- */
@@ -930,4 +932,133 @@ dialog {
   width: 100%;
   height: 100%;
   pointer-events: none;
+}
+
+/* name shown before the difficulty blurb once the picker is hidden (phones) */
+.diff-name {
+  display: none;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+/* ---- phones: smaller panels so the map gets most of the screen ---- */
+@media (max-width: 799px) {
+  .topbar {
+    top: calc(var(--safe-top) + 8px);
+    left: 12px;
+    right: 12px;
+  }
+
+  .brand {
+    font-size: 16px;
+    gap: 6px;
+    padding: 6px 12px 6px 8px;
+  }
+
+  .brand svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .brand .num {
+    font-size: 13px;
+  }
+
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+  }
+
+  .challenge {
+    top: calc(var(--safe-top) + 52px);
+    width: calc(100% - 24px);
+    padding: 7px 12px 8px;
+  }
+
+  /* the challenge line already says it's today's ring; twists keep their label */
+  #challenge-label:not(.twist) {
+    display: none;
+  }
+
+  #challenge-label.twist {
+    font-size: 11px;
+  }
+
+  .quest {
+    margin-top: 3px;
+  }
+
+  .bottom {
+    width: calc(100% - 24px);
+    bottom: calc(var(--safe-bottom) + 12px);
+  }
+
+  .play {
+    padding: 10px;
+    gap: 8px;
+  }
+
+  .difficulty button {
+    padding: 6px 4px;
+    font-size: 13px;
+  }
+
+  .difficulty-info {
+    margin: -2px 0 0;
+  }
+
+  .play .hint {
+    font-size: 13px;
+  }
+
+  .play .primary {
+    font-size: 16px;
+    padding: 12px;
+  }
+
+  /* once you start moving the map, the hint has done its job */
+  .explored .play .hint {
+    display: none;
+  }
+
+  /* outside test mode the map choice locks on the first move: drop the
+     (disabled) buttons and keep a one-line "Hard · … · locked" note */
+  .diff-locked .difficulty {
+    display: none;
+  }
+
+  .diff-locked .diff-name {
+    display: inline;
+  }
+
+  .diff-locked .diff-blurb {
+    display: none;
+  }
+
+  .maplibregl-ctrl-bottom-right,
+  .maplibregl-ctrl-bottom-left {
+    bottom: calc(var(--safe-bottom) + 12px + var(--bottom-h, 120px));
+  }
+
+  .toast {
+    bottom: calc(var(--safe-bottom) + 12px + var(--bottom-h, 120px) + 12px);
+  }
+}
+
+/* ---- confirm dialog (switching to an easier map) ---- */
+dialog.confirm {
+  width: min(340px, calc(100% - 32px));
+}
+
+dialog.confirm h2 {
+  font-size: 18px;
+}
+
+dialog.confirm .small {
+  margin: 0;
+  font-size: 14px;
+}
+
+dialog.confirm .dialog-actions button {
+  flex: 1;
 }

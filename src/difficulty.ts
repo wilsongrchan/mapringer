@@ -94,19 +94,34 @@ function chineseLabels(style: StyleSpec): StyleSpec {
 }
 
 /**
+ * Every style is shown on a spinnable globe: no Mercator stretching near the
+ * poles, and a ring looks the same size wherever it is. MapLibre switches to a
+ * flat map by itself once you zoom in close.
+ */
+export const GLOBE = { type: "globe" } as const;
+function globe(style: StyleSpec): StyleSpec {
+  return {
+    ...style,
+    projection: GLOBE,
+    // a soft atmosphere glow around the globe, fading out as you zoom in
+    sky: { "atmosphere-blend": ["interpolate", ["linear"], ["zoom"], 0, 1, 4, 1, 6, 0] },
+  };
+}
+
+/**
  * After locking in on Hard or Standard, lift the "fog of war": switch to the
  * full-colour Liberty map (blue water, yellow roads, green forests, all labels).
  */
 export function applyRevealStyle(map: maplibregl.Map, lang: Lang = "en"): void {
   const localise = lang === "zh" ? chineseLabels : (s: StyleSpec) => s;
-  map.setStyle(`${OFM}/liberty`, { diff: false, transformStyle: (_prev, next) => localise(next) });
+  map.setStyle(`${OFM}/liberty`, { diff: false, transformStyle: (_prev, next) => globe(localise(next)) });
 }
 
 export function applyMapStyle(map: maplibregl.Map, d: Difficulty, lang: Lang = "en"): void {
   const url = d === "easy" ? `${OFM}/liberty` : `${OFM}/positron`;
   const transform = d === "easy" ? satellite : d === "hard" ? blank : noRoads;
   const localise = lang === "zh" ? chineseLabels : (s: StyleSpec) => s;
-  map.setStyle(url, { diff: false, transformStyle: (_prev, next) => localise(transform(next)) });
+  map.setStyle(url, { diff: false, transformStyle: (_prev, next) => globe(localise(transform(next))) });
 }
 
 export function loadDifficulty(): Difficulty {

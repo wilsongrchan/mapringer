@@ -66,6 +66,11 @@ const en = {
   blurbStandard: "Light map with labels, no roads",
   blurbHard: "Land, lakes and rivers only",
   diffInfo: (v: Vars) => `${v.blurb} · ×${v.mult} points${v.locked ? " · locked for today" : ""}`,
+  confirmEasierTitle: (v: Vars) => `Switch to ${v.to}?`,
+  confirmEasierBody: (v: Vars) =>
+    `${v.blurb}, for ×${v.mult} points. You can't switch back to ${v.from} for this ring.`,
+  confirmSwitch: "Switch",
+  cancel: "Cancel",
 
   yourRing: "Your ring",
   target: "Target",
@@ -171,6 +176,10 @@ const zh: Record<Key, Entry> = {
   blurbStandard: "淺色地圖，有地名，沒有道路",
   blurbHard: "只有陸地、湖泊和河流",
   diffInfo: (v) => `${v.blurb} · 分數 ×${v.mult}${v.locked ? " · 今天已鎖定" : ""}`,
+  confirmEasierTitle: (v) => `轉到${v.to}地圖？`,
+  confirmEasierBody: (v) => `${v.blurb}，分數 ×${v.mult}。這一題之後不能轉回${v.from}。`,
+  confirmSwitch: "轉換",
+  cancel: "取消",
 
   yourRing: "你的圈",
   target: "目標",

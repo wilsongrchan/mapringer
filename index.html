@@ -144,6 +144,17 @@
       </div>
     </dialog>
 
+    <dialog id="confirm-dialog" class="card confirm">
+      <form method="dialog">
+        <h2 id="confirm-title"></h2>
+        <p class="small" id="confirm-body"></p>
+        <div class="dialog-actions">
+          <button value="cancel" data-i18n="cancel">Cancel</button>
+          <button class="primary" value="ok" data-i18n="confirmSwitch">Switch</button>
+        </div>
+      </form>
+    </dialog>
+
     <div class="toast" id="toast" role="status" hidden></div>
 
     <script type="module" src="/src/main.ts"></script>

@@ -6,7 +6,7 @@ import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&ur
 import "./style.css";
 import { applyStaticText, LANG, people, switchLanguage, t } from "./i18n";
 import { findClosestAnswer, MATCH_ACCURACY, type AnswerResult } from "./answer";
-import { applyMapStyle, applyRevealStyle, DIFFICULTIES, DIFFICULTY_ORDER, type Difficulty } from "./difficulty";
+import { applyMapStyle, applyRevealStyle, DIFFICULTIES, DIFFICULTY_ORDER, GLOBE, type Difficulty } from "./difficulty";
 import { circleRing, type LngLat } from "./geo";
 import { coords, placeName } from "./places";
 import { BONUS_MIN_SCORE, questBonus, questDone, questFor, surveyRing, type Quest } from "./quests";
@@ -37,11 +37,20 @@ let attempt = 0; // bumps on every reset so stale async work is ignored
 // Always open on Hard, so nobody can study the labelled map and then switch to Hard.
 let difficulty: Difficulty = locked?.difficulty ?? "hard";
 
+/**
+ * Start zoomed out far enough to see the whole globe between the panels. On a
+ * globe, zoom z draws Earth about 512·2^z/π px across.
+ */
+function wholeGlobeZoom(): number {
+  const room = Math.min(innerWidth, innerHeight - 260) * 0.92;
+  return Math.max(0.6, Math.min(2.2, Math.log2((room * Math.PI) / 512)));
+}
+
 const map = new maplibregl.Map({
   container: "map",
-  style: { version: 8, sources: {}, layers: [] },
+  style: { version: 8, sources: {}, layers: [], projection: GLOBE },
   center: [10, 25],
-  zoom: 1.6,
+  zoom: wholeGlobeZoom(),
   attributionControl: { compact: true },
   dragRotate: false,
   pitchWithRotate: false,
@@ -101,6 +110,8 @@ function renderPuzzle() {
         : practice
           ? t("practiceRing")
           : t("todaysRing");
+  // phones hide the plain "Today's ring" label but keep twist labels
+  $("challenge-label").classList.toggle("twist", puzzle.twist === "empty-giant" || puzzle.twist === "packed-tiny");
   $("challenge-line").innerHTML = t("challengeLine", {
     target: people(puzzle.target),
     radius: fmt(puzzle.radiusKm),
@@ -256,20 +267,40 @@ function renderDifficulty() {
     btn.disabled = d !== difficulty && (difficultyLocked || harder);
   }
   const info = DIFFICULTIES[difficulty];
-  $("difficulty-info").textContent = t("diffInfo", { blurb: info.blurb, mult: info.multiplier, locked: difficultyLocked ? 1 : "" });
+  // "Land, lakes and rivers only · ×1.2 points". On phones, once the buttons
+  // are hidden (.diff-locked in CSS), the name replaces the blurb:
+  // "Hard · ×1.2 points · locked for today".
+  const span = (cls: string, text: string) => Object.assign(document.createElement("span"), { className: cls, textContent: text });
+  const rest = t("diffInfo", { blurb: "", mult: info.multiplier, locked: difficultyLocked ? 1 : "" });
+  $("difficulty-info").replaceChildren(span("diff-name", info.label), span("diff-blurb", info.blurb), rest);
+  document.body.classList.toggle("diff-locked", difficultyLocked);
 }
 
-$("difficulty").addEventListener("click", (e) => {
+/** Switching to an easier map can't be undone for this ring, so ask first. */
+function confirmEasier(to: Difficulty): Promise<boolean> {
+  const dlg = $<HTMLDialogElement>("confirm-dialog");
+  const target = DIFFICULTIES[to];
+  $("confirm-title").textContent = t("confirmEasierTitle", { to: target.label });
+  $("confirm-body").textContent = t("confirmEasierBody", { blurb: target.blurb, mult: target.multiplier, from: DIFFICULTIES[difficulty].label });
+  dlg.returnValue = "";
+  dlg.showModal();
+  return new Promise((resolve) => dlg.addEventListener("close", () => resolve(dlg.returnValue === "ok"), { once: true }));
+}
+
+$("difficulty").addEventListener("click", async (e) => {
   const d = (e.target as HTMLElement).closest<HTMLButtonElement>("button")?.dataset.d as Difficulty | undefined;
   if (!d || d === difficulty || difficultyLocked) return;
   if (DIFFICULTY_ORDER.indexOf(d) > DIFFICULTY_ORDER.indexOf(difficulty)) return; // no going back up
+  if (!(await confirmEasier(d)) || difficultyLocked || locked) return;
   difficulty = d;
   applyMapStyle(map, d, LANG);
   renderDifficulty();
 });
 
 map.on("movestart", (e) => {
-  if (!UNLIMITED && !locked && !difficultyLocked && (e as { originalEvent?: Event }).originalEvent) {
+  if (locked || !(e as { originalEvent?: Event }).originalEvent) return;
+  document.body.classList.add("explored");
+  if (!UNLIMITED && !difficultyLocked) {
     difficultyLocked = true;
     renderDifficulty();
   }
@@ -423,11 +454,15 @@ function applyLayoutPadding() {
 applyLayoutPadding();
 wide.addEventListener("change", applyLayoutPadding);
 
+new ResizeObserver(([entry]) => {
+  document.documentElement.style.setProperty("--bottom-h", `${Math.round(entry.borderBoxSize[0].blockSize)}px`);
+}).observe(document.querySelector("footer.bottom")!);
+
 // fitBounds padding is on top of the layout padding above
 const padding = () =>
   sidebar()
     ? { top: 60, bottom: 60, left: 40, right: 60 }
-    : { top: 150, bottom: ($("result-panel").offsetHeight || 220) + 40, left: 30, right: 30 };
+    : { top: $("challenge").getBoundingClientRect().bottom + 20, bottom: ($("result-panel").offsetHeight || 220) + 40, left: 30, right: 30 };
 
 // Gauge: log scale from 100x too few (left) to 100x too many (right), target in
 // the middle, coloured with the five score bands.
@@ -736,6 +771,7 @@ function resetPlay() {
   setCenters([]);
   // every new attempt starts back on Hard
   difficultyLocked = false;
+  document.body.classList.remove("explored");
   if (difficulty !== "hard" || revealed) {
     difficulty = "hard";
     applyMapStyle(map, difficulty, LANG);
