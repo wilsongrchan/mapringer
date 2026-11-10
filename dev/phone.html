@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Phone Preview</title>
+<style>
+  :root {
+    --bg: #e9eaee; --panel: #ffffff; --text: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7;
+    --frame: #1c1c1e; --accent: #e4572e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111214; --panel: #1c1c1e; --text: #f5f5f7; --muted: #98989d; --line: #3a3a3c; --frame: #3a3a3c; }
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.4 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif; }
+  body { display: flex; flex-direction: column; }
+  .bar { display: flex; flex-wrap: wrap; gap: 14px; align-items: center; padding: 10px 16px;
+    background: var(--panel); border-bottom: 1px solid var(--line); }
+  .bar b { font-weight: 600; }
+  .group { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+  .group > span { color: var(--muted); }
+  label.chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border: 1px solid var(--line);
+    border-radius: 999px; cursor: pointer; user-select: none; }
+  label.chip:has(input:checked) { border-color: var(--accent); color: var(--accent); }
+  label.chip input { margin: 0; accent-color: var(--accent); }
+  input[type=text] { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px;
+    background: transparent; color: inherit; width: 180px; }
+  button { font: inherit; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px;
+    background: transparent; color: inherit; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  .stage { flex: 1; display: flex; gap: 32px; justify-content: center; align-items: flex-start;
+    padding: 20px; overflow: auto; }
+  .device { flex: none; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .device .name { color: var(--muted); font-size: 12px; }
+  .scaler { transform-origin: top left; }
+  .phone { position: relative; background: var(--frame); padding: 12px; border-radius: var(--outer-r);
+    box-shadow: 0 0 0 2px #000 inset, 0 20px 50px rgba(0,0,0,.25); }
+  .screen { position: relative; overflow: hidden; border-radius: var(--inner-r); background: #000;
+    display: flex; flex-direction: column; }
+  .screen iframe { border: 0; display: block; width: 100%; flex: 1; background: #fff; }
+  .status { flex: none; position: relative; display: flex; justify-content: space-between; align-items: center;
+    padding: 0 30px; font-weight: 600; font-size: 16px; color: #000; background: #f2f2f7; z-index: 2; }
+  .status.overlay { position: absolute; top: 0; left: 0; right: 0; background: transparent; pointer-events: none;
+    mix-blend-mode: difference; color: #fff; }
+  .status .icons { display: flex; gap: 5px; align-items: center; }
+  .batt { width: 25px; height: 12px; border: 1.5px solid currentColor; border-radius: 4px; padding: 1.5px; opacity: .9; }
+  .batt i { display: block; height: 100%; width: 80%; background: currentColor; border-radius: 1.5px; }
+  .island { position: absolute; left: 50%; transform: translateX(-50%); background: #000; border-radius: 20px;
+    z-index: 3; pointer-events: none; }
+  .notch { position: absolute; left: 50%; transform: translateX(-50%); top: 0; width: 160px; height: 32px;
+    background: #000; border-radius: 0 0 20px 20px; z-index: 3; pointer-events: none; }
+  .safari { flex: none; background: rgba(242,242,247,.96); border-top: 1px solid rgba(0,0,0,.12);
+    display: flex; flex-direction: column; align-items: center; padding-top: 8px; z-index: 2; }
+  .safari .url { width: calc(100% - 24px); height: 40px; border-radius: 12px; background: rgba(118,118,128,.14);
+    display: flex; align-items: center; justify-content: center; color: #000; font-size: 15px; }
+  .homebar { position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%); width: 134px; height: 5px;
+    border-radius: 3px; background: #000; z-index: 4; pointer-events: none; mix-blend-mode: difference; filter: invert(1); }
+  .se-chin { height: 70px; display: flex; align-items: center; justify-content: center; }
+  .se-chin i { width: 46px; height: 46px; border-radius: 50%; border: 2px solid #555; }
+  .se-brow { height: 60px; }
+  .hint { color: var(--muted); padding: 0 16px 12px; text-align: center; }
+</style>
+</head>
+<body>
+<div class="bar">
+  <b>Phone preview</b>
+  <div class="group" id="devices"><span>Devices</span></div>
+  <div class="group"><span>Mode</span>
+    <label class="chip"><input type="radio" name="mode" value="safari" checked> Safari</label>
+    <label class="chip"><input type="radio" name="mode" value="app"> Home-screen app</label>
+  </div>
+  <div class="group"><span>Path</span>
+    <input type="text" id="path" value="/" spellcheck="false" title="e.g. /?day=12 or /?unlimited=0">
+    <button id="reload">Reload</button>
+  </div>
+  <div class="group"><span>Zoom</span>
+    <label class="chip"><input type="radio" name="zoom" value="fit" checked> Fit</label>
+    <label class="chip"><input type="radio" name="zoom" value="1"> 100%</label>
+  </div>
+</div>
+<div class="stage" id="stage"></div>
+<div class="hint">Mouse drag = one-finger pan; scroll = zoom. Notch and home-bar spacing is applied through the app's --safe-top / --safe-bottom variables. For real touch, pinch and Safari behaviour, open the LAN URL on your iPhone.</div>
+
+<script>
+// CSS viewport sizes (points). Safe-area values are portrait insets in standalone/full-screen mode.
+const DEVICES = [
+  { id: "se",    name: "iPhone SE (3rd gen)", w: 375, h: 667, top: 20, bottom: 0,  kind: "home",   r: 0 },
+  { id: "mini",  name: "iPhone 13 mini",      w: 375, h: 812, top: 50, bottom: 34, kind: "notch",  r: 44 },
+  { id: "16e",   name: "iPhone 16e",          w: 390, h: 844, top: 47, bottom: 34, kind: "notch",  r: 47 },
+  { id: "16",    name: "iPhone 16 / 17",      w: 393, h: 852, top: 59, bottom: 34, kind: "island", r: 55 },
+  { id: "pmax",  name: "iPhone 16 Pro Max",   w: 440, h: 956, top: 62, bottom: 34, kind: "island", r: 62 },
+];
+const SAFARI_BAR = 50; // approx. collapsed-address-bar height above the home-indicator area
+
+const store = {
+  get(k, d) { try { return JSON.parse(localStorage.getItem("phonePreview." + k)) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem("phonePreview." + k, JSON.stringify(v)); } catch {} },
+};
+
+const devBox = document.getElementById("devices");
+const selected = new Set(store.get("devices", ["16"]));
+for (const d of DEVICES) {
+  const l = document.createElement("label");
+  l.className = "chip";
+  l.innerHTML = `<input type="checkbox" value="${d.id}"> ${d.name.replace("iPhone ", "")}`;
+  l.querySelector("input").checked = selected.has(d.id);
+  devBox.append(l);
+}
+const pathEl = document.getElementById("path");
+pathEl.value = store.get("path", "/");
+for (const n of ["mode", "zoom"]) {
+  const v = store.get(n, null);
+  if (v) document.querySelector(`input[name=${n}][value="${v}"]`)?.click();
+}
+
+function opt(name) { return document.querySelector(`input[name=${name}]:checked`).value; }
+
+function injectSafeArea(iframe, top, bottom) {
+  try {
+    const doc = iframe.contentDocument;
+    let s = doc.getElementById("__phone_preview");
+    if (!s) { s = doc.createElement("style"); s.id = "__phone_preview"; doc.head.append(s); }
+    s.textContent = `:root{--safe-top:${top}px !important;--safe-bottom:${bottom}px !important;}`;
+  } catch (e) { console.warn("Could not inject safe-area insets", e); }
+}
+
+function clock() { const d = new Date(); return `${d.getHours()}:${String(d.getMinutes()).padStart(2, "0")}`; }
+
+function statusBar(d, overlay) {
+  const el = document.createElement("div");
+  el.className = "status" + (overlay ? " overlay" : "");
+  el.style.height = d.top + "px";
+  el.style.fontSize = d.kind === "home" ? "12px" : "16px";
+  if (d.kind === "island") el.style.paddingTop = "6px";
+  el.innerHTML = `<span>${clock()}</span><span class="icons">
+    <svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2.5" width="3" height="9.5" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+    <span class="batt"><i></i></span></span>`;
+  return el;
+}
+
+function render() {
+  const stage = document.getElementById("stage");
+  stage.innerHTML = "";
+  const mode = opt("mode"), zoom = opt("zoom");
+  const ids = [...devBox.querySelectorAll("input:checked")].map(i => i.value);
+  store.set("devices", ids); store.set("mode", mode); store.set("zoom", zoom); store.set("path", pathEl.value);
+  const list = DEVICES.filter(d => ids.includes(d.id));
+  if (!list.length) { stage.textContent = "Pick at least one device."; return; }
+
+  const avail = stage.clientHeight - 40 - 24;
+  for (const d of list) {
+    const isSE = d.kind === "home";
+    const phoneW = d.w + 24, phoneH = d.h + 24 + (isSE ? 130 : 0);
+    const scale = zoom === "fit" ? Math.min(1, avail / phoneH) : 1;
+
+    const wrap = document.createElement("div");
+    wrap.className = "device";
+    wrap.innerHTML = `<div class="name">${d.name} · ${d.w}×${d.h}</div>`;
+    const holder = document.createElement("div");
+    holder.style.width = phoneW * scale + "px";
+    holder.style.height = phoneH * scale + "px";
+    const scaler = document.createElement("div");
+    scaler.className = "scaler";
+    scaler.style.transform = `scale(${scale})`;
+
+    const phone = document.createElement("div");
+    phone.className = "phone";
+    phone.style.setProperty("--outer-r", (d.r ? d.r + 12 : 40) + "px");
+    phone.style.setProperty("--inner-r", d.r + "px");
+    if (isSE) phone.insertAdjacentHTML("beforeend", `<div class="se-brow"></div>`);
+
+    const screen = document.createElement("div");
+    screen.className = "screen";
+    screen.style.width = d.w + "px";
+    screen.style.height = d.h + "px";
+
+    const iframe = document.createElement("iframe");
+    let safeTop, safeBottom;
+    if (mode === "app") {
+      // Full screen: page runs under the status bar; insets come from the device.
+      safeTop = d.top; safeBottom = d.bottom;
+      screen.append(iframe, statusBar(d, true));
+    } else {
+      // Safari: status bar above the page, address bar + home-indicator area below it.
+      safeTop = 0; safeBottom = 0;
+      screen.append(statusBar(d, false), iframe);
+      const bar = document.createElement("div");
+      bar.className = "safari";
+      bar.style.height = SAFARI_BAR + d.bottom + "px";
+      bar.innerHTML = `<div class="url">${location.hostname}</div>`;
+      screen.append(bar);
+    }
+    if (d.kind === "island") {
+      const isl = document.createElement("div");
+      isl.className = "island";
+      Object.assign(isl.style, { top: "11px", width: "125px", height: "37px" });
+      screen.append(isl);
+    } else if (d.kind === "notch") {
+      const n = document.createElement("div"); n.className = "notch"; screen.append(n);
+    }
+    if (d.bottom) { const hb = document.createElement("div"); hb.className = "homebar"; screen.append(hb); }
+
+    iframe.addEventListener("load", () => injectSafeArea(iframe, safeTop, safeBottom));
+    iframe.src = pathEl.value || "/";
+
+    phone.append(screen);
+    if (isSE) phone.insertAdjacentHTML("beforeend", `<div class="se-chin"><i></i></div>`);
+    scaler.append(phone);
+    holder.append(scaler);
+    wrap.append(holder);
+    stage.append(wrap);
+  }
+}
+
+document.querySelector(".bar").addEventListener("change", e => { if (e.target.id !== "path") render(); });
+document.getElementById("reload").addEventListener("click", render);
+pathEl.addEventListener("keydown", e => { if (e.key === "Enter") render(); });
+let t; addEventListener("resize", () => { clearTimeout(t); t = setTimeout(render, 150); });
+setInterval(() => document.querySelectorAll(".status > span:first-child").forEach(s => s.textContent = clock()), 30000);
+render();
+</script>
+</body>
+</html>
