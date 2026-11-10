@@ -45,6 +45,8 @@ const map = new maplibregl.Map({
   attributionControl: { compact: true },
   dragRotate: false,
   pitchWithRotate: false,
+  // lets the reveal transition snapshot the pre-lock map
+  canvasContextAttributes: { preserveDrawingBuffer: true },
 });
 map.touchZoomRotate.disableRotation();
 map.keyboard.disableRotation();
@@ -68,7 +70,23 @@ function questText(q: Quest): string {
   return q.kind === "continent" ? t("questContinent", { continent: t(q.continent) }) : t(q.kind === "equator" ? "questEquator" : q.kind === "landlocked" ? "questLandlocked" : q.kind === "islandsOnly" ? "questIslands" : "questTwoContinents");
 }
 
+/** Map lines that go with the day's quest (just the equator, for now). */
+function questLines() {
+  const features =
+    quest.kind === "equator"
+      ? [
+          {
+            type: "Feature" as const,
+            properties: { name: t("equator") },
+            geometry: { type: "LineString" as const, coordinates: [[-180, 0], [0, 0], [180, 0]] },
+          },
+        ]
+      : [];
+  return { type: "FeatureCollection" as const, features };
+}
+
 function renderQuest() {
+  (map?.getSource("quest-lines") as maplibregl.GeoJSONSource | undefined)?.setData(questLines());
   $("quest-bonus").textContent = `+${quest.bonus}`;
   $("quest-text").textContent = `${questText(quest)} ${t("questRule", { min: BONUS_MIN_SCORE })}`;
 }
@@ -134,7 +152,7 @@ function drawOverlay() {
 }
 
 function updateRing() {
-  overlay.style.display = locked ? "none" : "";
+  overlay.style.display = locked && !holdOverlay ? "none" : "";
   if (locked) {
     setData("ring", circleFeature({ lng: locked.lng, lat: locked.lat }, puzzle.radiusKm));
   } else {
@@ -175,6 +193,28 @@ map.on("style.load", () => {
     paint: { "line-color": COLOR.good, "line-width": 3, "line-dasharray": [2, 1.5] },
   });
   map.addLayer({ id: "ring-line", type: "line", source: "ring", paint: { "line-color": COLOR.ring, "line-width": 3 } });
+  // the equator, drawn when today's side quest is to cross it
+  map.addSource("quest-lines", { type: "geojson", data: questLines() });
+  map.addLayer({
+    id: "quest-line",
+    type: "line",
+    source: "quest-lines",
+    paint: { "line-color": "#c48a00", "line-width": 2, "line-dasharray": [4, 3], "line-opacity": 0.85 },
+  });
+  map.addLayer({
+    id: "quest-line-label",
+    type: "symbol",
+    source: "quest-lines",
+    layout: {
+      "symbol-placement": "line",
+      "symbol-spacing": 400,
+      "text-field": ["get", "name"],
+      "text-font": ["Noto Sans Regular"],
+      "text-size": 12,
+      "text-offset": [0, -0.8],
+    },
+    paint: { "text-color": "#8a6100", "text-halo-color": "rgba(255,255,255,0.9)", "text-halo-width": 1.5 },
+  });
   map.addSource("centers", { type: "geojson", data: centerData });
   map.addLayer({
     id: "centers",
@@ -372,7 +412,8 @@ const sidebar = () => wide.matches && document.body.classList.contains("showing-
 
 function setResultLayout(on: boolean) {
   document.body.classList.toggle("showing-result", on);
-  applyLayoutPadding();
+  // shifting the map's centre waits for any reveal wipe, which needs a still map
+  revealDone.then(applyLayoutPadding);
 }
 
 /** Keep the rings in the middle of the part of the map the panels don't cover. */
@@ -455,19 +496,86 @@ function renderGauge(r: Result, animate: boolean) {
 let revealed = false;
 
 /** Lift the fog: full-colour map with roads and labels once the ring is locked in. */
-function revealMap(r: Result) {
+let holdOverlay = false; // keep the screen-space ring drawn during the reveal wipe
+let revealDone: Promise<void> = Promise.resolve(); // camera moves wait for the wipe
+
+/** Lift the fog: full-colour map with roads and labels once the ring is locked in. */
+function revealMap(r: Result, animate: boolean) {
   if (revealed || r.difficulty === "easy") return;
   revealed = true;
+  if (!animate) {
+    applyRevealStyle(map, LANG);
+    return;
+  }
+  revealDone = revealWipe(map.project([r.lng, r.lat])).catch((e) => {
+    console.error(e);
+    $("reveal-snap").hidden = true;
+  });
+}
+
+/**
+ * Circular reveal: snapshot the current map, load the colour map underneath,
+ * then grow a soft-edged hole in the snapshot outward from the ring's centre.
+ */
+async function revealWipe(at: { x: number; y: number }) {
+  const snap = $<HTMLCanvasElement>("reveal-snap");
+  const src = map.getCanvas();
+  snap.width = src.width;
+  snap.height = src.height;
+  snap.getContext("2d")!.drawImage(src, 0, 0);
+  setMask(snap, "none");
+  snap.hidden = false;
+  holdOverlay = true;
+  updateRing();
+  drawOverlay();
+
   applyRevealStyle(map, LANG);
+  // wait for the colour map to draw, but not long: slow tiles can fill in as the wipe opens
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(resolve, 1200);
+    map.once("style.load", () =>
+      map.once("idle", () => {
+        clearTimeout(timer);
+        resolve();
+      }),
+    );
+  });
+
+  const feather = 60;
+  const maxR = Math.hypot(Math.max(at.x, innerWidth - at.x), Math.max(at.y, innerHeight - at.y)) + feather;
+  // (in dev, window.__revealMs can slow the wipe down for inspection)
+  const MS = (import.meta.env.DEV && (window as unknown as { __revealMs?: number }).__revealMs) || 1400;
+  await new Promise<void>((resolve) => {
+    const start = performance.now();
+    const step = (now: number) => {
+      const t = Math.min(1, (now - start) / MS);
+      const e = t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2; // ease in-out
+      const r = e * maxR;
+      setMask(snap, `radial-gradient(circle at ${at.x}px ${at.y}px, transparent ${Math.max(0, r - feather)}px, #000 ${r}px)`);
+      if (t < 1) requestAnimationFrame(step);
+      else resolve();
+    };
+    requestAnimationFrame(step);
+  });
+
+  snap.hidden = true;
+  holdOverlay = false;
+  updateRing();
+}
+
+function setMask(el: HTMLElement, mask: string) {
+  el.style.maskImage = mask;
+  el.style.setProperty("-webkit-mask-image", mask);
 }
 
 function showResult(r: Result, animate: boolean) {
   const myAttempt = attempt;
   const center = { lng: r.lng, lat: r.lat };
+  // start the reveal before the layout shifts the map, so the snapshot lines up
+  revealMap(r, animate);
   $("play-panel").hidden = true;
   $("result-panel").hidden = false;
   setResultLayout(true);
-  revealMap(r);
   setCollapsed(false, false);
   $("crosshair").classList.add("hidden");
   $("result-target").textContent = fmt(puzzle.target);
@@ -511,7 +619,9 @@ function showResult(r: Result, animate: boolean) {
   countUp($("result-pop"), r.population, animate ? 1000 : 0);
   startCountdown();
 
-  fitRings([{ center, radiusKm: puzzle.radiusKm * 1.3 }], animate ? 800 : 0);
+  revealDone.then(() => {
+    if (myAttempt === attempt) fitRings([{ center, radiusKm: puzzle.radiusKm * 1.3 }], animate ? 800 : 0);
+  });
 
   if (r.accuracy >= MATCH_ACCURACY) {
     setAnswerLine("found");
@@ -584,7 +694,10 @@ function showAnswer(r: Result, res: AnswerResult, animate: boolean) {
     { center: { lng: r.lng, lat: r.lat }, radiusKm: puzzle.radiusKm },
     { center: a.center, radiusKm: puzzle.radiusKm },
   ];
-  fitRings(rings, animate ? 1200 : 0);
+  const myAttempt = attempt;
+  revealDone.then(() => {
+    if (myAttempt === attempt) fitRings(rings, animate ? 1200 : 0);
+  });
 }
 
 let countdownTimer: number | undefined;
@@ -628,6 +741,8 @@ function resetPlay() {
     applyMapStyle(map, difficulty, LANG);
   }
   revealed = false;
+  holdOverlay = false;
+  $("reveal-snap").hidden = true;
   renderDifficulty();
   updateRing();
 }

@@ -94,6 +94,7 @@ const en = {
   northAmerica: "North America",
   southAmerica: "South America",
   oceania: "Oceania",
+  equator: "Equator",
 
   bullseye: "Bullseye! 🎯",
   close: "So close. Great ring.",
@@ -198,6 +199,7 @@ const zh: Record<Key, Entry> = {
   northAmerica: "北美洲",
   southAmerica: "南美洲",
   oceania: "大洋洲",
+  equator: "赤道",
 
   bullseye: "正中目標！🎯",
   close: "非常接近，好圈！",
