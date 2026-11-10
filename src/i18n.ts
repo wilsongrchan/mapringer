@@ -112,10 +112,10 @@ const en = {
 
   // result verdicts: one is picked per result ("|" separates the choices)
   // (same order as the Chinese lists, so both languages pick the matching joke)
-  verdictGood: "Ringmaster!|Put a finger on my ring.|What! A! Ring!",
+  verdictGood: "Ringmaster!|Should've put a ring on it!|What! A! Ring!",
   verdictMeh: "But here's my number, so ring me maybe?|Is this a ring or a trap?|You're thinking outside the ring… I see",
   verdictBadFew: "Next time the challenge will be to fit 0 people…|Where do we come from? What are we?",
-  verdictBadMany: "I don't want to be here.|Where do we come from? What are we?",
+  verdictBadMany: "It's getting crowded in here!|Where do we come from? What are we?",
   verdictOcean: "Under the sea… under the sea…",
 
   gaugeTarget: "target",
