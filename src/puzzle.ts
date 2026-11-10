@@ -5,6 +5,31 @@ export interface Puzzle {
   number: number;
   radiusKm: number;
   target: number;
+  /** Set on occasional "twist" puzzles that flip the usual size/crowd pairing. */
+  twist?: "empty-giant" | "packed-tiny";
+}
+
+/** About 1 in 8 puzzles is a twist. */
+const TWIST_CHANCE = 0.125;
+/**
+ * Densest real rings in the GHSL data (Surat for 3 km, Dhaka for 5 km).
+ * Packed-tiny targets are 25–60% of these so they stay reachable.
+ */
+const TINY_RING_MAX: Record<number, number> = { 3: 3_980_000, 5: 6_930_000 };
+
+const logUniform = (rand: () => number, lo: number, hi: number) =>
+  Math.exp(Math.log(lo) + rand() * (Math.log(hi) - Math.log(lo)));
+
+function twistPuzzle(number: number, rand: () => number): Puzzle {
+  if (rand() < 0.5) {
+    // A huge ring with hardly anyone in it: remote islands, deserts, the far north.
+    const radiusKm = [500, 750, 1000][Math.floor(rand() * 3)];
+    return { number, radiusKm, target: niceRound(logUniform(rand, 500, 20_000)), twist: "empty-giant" };
+  }
+  // A tiny ring packed with people: the densest city centres on Earth.
+  const radiusKm = rand() < 0.5 ? 3 : 5;
+  const target = niceRound(TINY_RING_MAX[radiusKm] * (0.25 + rand() * 0.35));
+  return { number, radiusKm, target, twist: "packed-tiny" };
 }
 
 const RADII_KM = [3, 5, 8, 10, 15, 20, 25, 30, 40, 50];
@@ -49,6 +74,7 @@ export function niceRound(n: number): number {
 export function puzzleFor(number: number): Puzzle {
   const rand = mulberry32(number * 2654435761);
   rand(); // discard first value: it correlates with nearby seeds
+  if (rand() < TWIST_CHANCE) return twistPuzzle(number, rand);
   const radii = rand() < BIG_RING_CHANCE ? BIG_RADII_KM : RADII_KM;
   const radiusKm = radii[Math.floor(rand() * radii.length)];
   const maxD = maxDensity(radiusKm);

@@ -48,12 +48,34 @@ map.keyboard.disableRotation();
 if (import.meta.env.DEV) (window as unknown as { __map: maplibregl.Map }).__map = map; // for debugging
 applyMapStyle(map, difficulty);
 
+/** "an 8 km ring", "an 80 km ring", "an 11 km ring", otherwise "a …". */
+const article = (n: number) => (String(n).startsWith("8") || n === 11 || n === 18 ? "an" : "a");
+
+/** Shrink an element's font until its text fits on one line (down to `minPx`). */
+function fitOneLine(el: HTMLElement, maxPx: number, minPx = 11) {
+  el.style.fontSize = `${maxPx}px`;
+  for (let px = maxPx; px > minPx && el.scrollWidth > el.clientWidth; px -= 0.5) el.style.fontSize = `${px - 0.5}px`;
+}
+
+const fitChallenge = () => fitOneLine($("challenge-line"), 19);
+
 function renderPuzzle() {
   $("puzzle-num").textContent = practice ? "· practice" : `#${puzzle.number}${UNLIMITED ? " · test" : ""}`;
+  $("challenge-label").textContent =
+    puzzle.twist === "empty-giant"
+      ? "Twist · a giant, empty ring"
+      : puzzle.twist === "packed-tiny"
+        ? "Twist · a tiny, packed ring"
+        : practice
+          ? "Practice ring"
+          : "Today's ring";
   $("target").textContent = fmt(puzzle.target);
-  $("radius").textContent = `a ${fmt(puzzle.radiusKm)} km ring`;
+  $("radius").textContent = `${article(puzzle.radiusKm)} ${fmt(puzzle.radiusKm)} km ring`;
+  fitChallenge();
 }
 renderPuzzle();
+addEventListener("resize", fitChallenge);
+document.fonts?.ready.then(fitChallenge);
 
 if (UNLIMITED) {
   $("play-hint").textContent = "Test mode: unlimited attempts and puzzles, nothing is saved.";
@@ -78,9 +100,29 @@ function setData(source: string, data: Feature | typeof EMPTY) {
   (map.getSource(source) as maplibregl.GeoJSONSource | undefined)?.setData(data);
 }
 
+/**
+ * While placing, the ring is an SVG overlay redrawn synchronously on every
+ * camera move (a GeoJSON layer updates a frame or two late, so it visibly
+ * trails the centre dot when panning on a phone). Once locked in, the ring
+ * becomes a normal map layer.
+ */
+const overlay = document.getElementById("ring-overlay") as unknown as SVGSVGElement;
+const overlayPath = document.getElementById("ring-overlay-path") as unknown as SVGPathElement;
+
+function drawOverlay() {
+  const c = map.getCenter();
+  const pts = circleRing({ lng: c.lng, lat: c.lat }, puzzle.radiusKm, 96).map(([lng, lat]) => map.project([lng, lat]));
+  overlayPath.setAttribute("d", `M${pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join("L")}Z`);
+}
+
 function updateRing() {
-  const center = locked ? { lng: locked.lng, lat: locked.lat } : map.getCenter();
-  setData("ring", circleFeature(center, puzzle.radiusKm));
+  overlay.style.display = locked ? "none" : "";
+  if (locked) {
+    setData("ring", circleFeature({ lng: locked.lng, lat: locked.lat }, puzzle.radiusKm));
+  } else {
+    setData("ring", EMPTY);
+    drawOverlay();
+  }
 }
 
 let answerData: Feature | typeof EMPTY = EMPTY;
@@ -135,7 +177,10 @@ map.once("load", () => {
 });
 
 map.on("move", () => {
-  if (!locked) updateRing();
+  if (!locked) drawOverlay();
+});
+map.on("resize", () => {
+  if (!locked) drawOverlay();
 });
 
 // ---- difficulty ----
@@ -206,6 +251,25 @@ function verdict(r: Result): string {
   if (a >= 50) return `In the ballpark, but ${r.population > puzzle.target ? "too crowded" : "too empty"}.`;
   return r.population > puzzle.target ? "Way too many people!" : "Way too few people!";
 }
+
+let lastBounds: maplibregl.LngLatBounds | null = null;
+
+/** Frame the given rings in the part of the map the panels don't cover. */
+function fitRings(rings: { center: LngLat; radiusKm: number }[], duration: number) {
+  lastBounds = boundsOf(rings);
+  map.fitBounds(lastBounds, { padding: padding(), duration, maxZoom: 13 });
+}
+
+// ---- mobile: collapsible results panel ----
+function setCollapsed(collapsed: boolean, refit = true) {
+  $("result-panel").classList.toggle("collapsed", collapsed);
+  $("result-toggle").setAttribute("aria-expanded", String(!collapsed));
+  $("result-toggle-label").textContent = collapsed ? "Show results" : "Hide results";
+  if (refit && lastBounds) map.fitBounds(lastBounds, { padding: padding(), duration: 400, maxZoom: 13 });
+}
+$("result-toggle").addEventListener("click", () =>
+  setCollapsed(!$("result-panel").classList.contains("collapsed")),
+);
 
 function boundsOf(rings: { center: LngLat; radiusKm: number }[]) {
   const b = new maplibregl.LngLatBounds();
@@ -308,14 +372,22 @@ function showResult(r: Result, animate: boolean) {
   $("play-panel").hidden = true;
   $("result-panel").hidden = false;
   setResultLayout(true);
+  setCollapsed(false, false);
   $("crosshair").classList.add("hidden");
   $("result-target").textContent = fmt(puzzle.target);
+  // long numbers (e.g. 1,310,000,000) get a smaller size so the two columns fit
+  const longest = Math.max(fmt(r.population).length, fmt(puzzle.target).length);
+  for (const id of ["result-pop", "result-target"]) {
+    $(id).classList.toggle("long", longest > 9);
+    $(id).classList.toggle("very-long", longest > 11);
+  }
   r.score ??= score(r.population, puzzle.target); // results saved before scoring changed
   r.difficulty ??= "standard";
   r.points ??= r.score * DIFFICULTIES[r.difficulty].multiplier;
   const mult = DIFFICULTIES[r.difficulty].multiplier;
   $("result-bar").textContent = emojiBar(r.score);
   $("result-acc").textContent = `${r.score.toFixed(1)}`;
+  $("result-summary").innerHTML = `<strong>${fmt(r.population)}</strong> people · ${emojiBar(r.score)} <strong>${(mult === 1 ? r.score : r.points).toFixed(1)}</strong> ${mult === 1 ? "" : "pts"}`;
   $("result-points").innerHTML =
     mult === 1 ? "" : `×${mult} = <strong>${r.points.toFixed(1)}</strong> pts`;
   $("result-verdict").textContent = verdict(r);
@@ -326,11 +398,7 @@ function showResult(r: Result, animate: boolean) {
   countUp($("result-pop"), r.population, animate ? 1000 : 0);
   startCountdown();
 
-  map.fitBounds(boundsOf([{ center, radiusKm: puzzle.radiusKm * 1.3 }]), {
-    padding: padding(),
-    duration: animate ? 800 : 0,
-    maxZoom: 13,
-  });
+  fitRings([{ center, radiusKm: puzzle.radiusKm * 1.3 }], animate ? 800 : 0);
 
   if (r.accuracy >= MATCH_ACCURACY) {
     setAnswerLine("found");
@@ -402,7 +470,7 @@ function showAnswer(r: Result, res: AnswerResult, animate: boolean) {
     { center: { lng: r.lng, lat: r.lat }, radiusKm: puzzle.radiusKm },
     { center: a.center, radiusKm: puzzle.radiusKm },
   ];
-  map.fitBounds(boundsOf(rings), { padding: padding(), duration: animate ? 1200 : 0, maxZoom: 13 });
+  fitRings(rings, animate ? 1200 : 0);
 }
 
 let countdownTimer: number | undefined;
@@ -431,6 +499,8 @@ function resetPlay() {
   $("result-panel").hidden = true;
   $("play-panel").hidden = false;
   setResultLayout(false);
+  setCollapsed(false, false);
+  lastBounds = null;
   $("crosshair").classList.remove("hidden");
   lockBtn.disabled = false;
   lockBtn.textContent = "Lock in ring";

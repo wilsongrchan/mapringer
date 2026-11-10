@@ -566,3 +566,286 @@ dialog ol {
     left: calc(50% + 206px);
   }
 }
+
+/* ---- mobile: collapsible results panel ---- */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.result-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: calc(100% + 32px);
+  margin: -16px -16px 4px;
+  padding: 10px 16px 6px;
+  border: none;
+  border-radius: var(--radius) var(--radius) 0 0;
+  position: relative;
+}
+
+.result-toggle .grab {
+  width: 40px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--border);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.result-toggle .result-summary,
+.result-toggle .chev {
+  display: none;
+}
+
+.result.collapsed {
+  padding-bottom: 10px;
+}
+
+.result.collapsed .result-details {
+  display: none;
+}
+
+.result.collapsed .result-toggle {
+  justify-content: space-between;
+  margin-bottom: 0;
+  padding: 12px 16px 2px;
+}
+
+.result.collapsed .grab {
+  position: absolute;
+  top: 5px;
+  left: 50%;
+  margin-left: -20px;
+}
+
+.result.collapsed .result-summary {
+  display: block;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+.result.collapsed .chev {
+  display: block;
+  color: var(--muted);
+}
+
+.result.collapsed .chev::before {
+  content: "▴";
+  font-size: 16px;
+}
+
+/* wide screens use the left column instead; no toggle there */
+@media (min-width: 800px) {
+  .result-toggle {
+    display: none;
+  }
+
+  .result.collapsed .result-details {
+    display: block;
+  }
+}
+
+/* challenge always on one line; JS shrinks the font to fit */
+.challenge-line {
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* result numbers: smaller on phones, and smaller still for very long numbers */
+@media (max-width: 799px) {
+  .big {
+    font-size: 21px;
+  }
+
+  .big.long {
+    font-size: 18px;
+  }
+
+  .big.very-long {
+    font-size: 16px;
+  }
+}
+
+/* ---- how-to-play animation (6 s loop) ---- */
+dialog {
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+.demo {
+  position: relative;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  margin: 4px 0 12px;
+}
+
+.demo-map {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.demo-sea { fill: #cfdde6; }
+.demo-land { fill: #f2efe9; }
+.demo-river { fill: none; stroke: #b5cbd8; stroke-width: 3; }
+.demo-city { fill: #8d8a85; opacity: 0.55; }
+.demo-town { fill: #8d8a85; opacity: 0.4; }
+
+@media (prefers-color-scheme: dark) {
+  .demo-sea { fill: #1d2a33; }
+  .demo-land { fill: #2a2c30; }
+  .demo-river { stroke: #34495a; }
+  .demo-city,
+  .demo-town { fill: #c9c5bd; }
+}
+
+.demo-ring {
+  fill: rgba(228, 87, 46, 0.14);
+  stroke: var(--accent);
+  stroke-width: 3;
+  animation: demo-ring 6s infinite;
+}
+
+.demo-dot { fill: var(--accent); stroke: #fff; stroke-width: 1.5; }
+
+/* the map slides left so the far city drifts under the ring */
+.demo-pan { animation: demo-pan 6s infinite cubic-bezier(0.45, 0, 0.25, 1); }
+
+/* a "finger" drags the map */
+.demo-hand circle {
+  fill: rgba(0, 0, 0, 0.18);
+  stroke: rgba(255, 255, 255, 0.9);
+  stroke-width: 2;
+}
+.demo-hand { animation: demo-hand 6s infinite cubic-bezier(0.45, 0, 0.25, 1); }
+
+@keyframes demo-pan {
+  0%, 12% { transform: translate(0, 0); }
+  45%, 100% { transform: translate(-182px, -45px); }
+}
+
+@keyframes demo-hand {
+  0% { transform: translate(250px, 120px); opacity: 0; }
+  8%, 12% { transform: translate(250px, 120px); opacity: 1; }
+  45% { transform: translate(68px, 75px); opacity: 1; }
+  52%, 100% { transform: translate(68px, 75px); opacity: 0; }
+}
+
+@keyframes demo-ring {
+  0%, 62% { fill: rgba(228, 87, 46, 0.14); stroke: var(--accent); }
+  70%, 100% { fill: rgba(42, 157, 143, 0.25); stroke: var(--good); }
+}
+
+.demo-ui {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  display: flex;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.demo-btn,
+.demo-result {
+  position: absolute;
+  bottom: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.demo-btn {
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-weight: 600;
+  animation: demo-btn 6s infinite;
+}
+
+.demo-result {
+  background: var(--card);
+  color: var(--fg);
+  box-shadow: var(--shadow);
+  animation: demo-result 6s infinite;
+}
+
+@keyframes demo-btn {
+  0%, 50% { opacity: 1; transform: scale(1); }
+  56% { opacity: 1; transform: scale(0.9); }
+  60% { opacity: 1; transform: scale(1); }
+  64%, 100% { opacity: 0; transform: scale(1); }
+}
+
+@keyframes demo-result {
+  0%, 64% { opacity: 0; transform: translateY(6px); }
+  70%, 96% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(0); }
+}
+
+/* steps light up in time with the animation */
+.demo-steps {
+  margin: 0 0 8px;
+  padding-left: 20px;
+  line-height: 1.45;
+  font-size: 15px;
+}
+
+.demo-steps li { animation: demo-step 6s infinite; }
+.demo-steps .s1 { animation-name: demo-step-1; }
+.demo-steps .s2 { animation-name: demo-step-2; }
+.demo-steps .s3 { animation-name: demo-step-3; }
+
+@keyframes demo-step-1 { 0%, 10% { color: var(--fg); } 14%, 100% { color: var(--muted); } }
+@keyframes demo-step-2 { 0%, 10% { color: var(--muted); } 14%, 50% { color: var(--fg); } 54%, 100% { color: var(--muted); } }
+@keyframes demo-step-3 { 0%, 50% { color: var(--muted); } 54%, 100% { color: var(--fg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .demo *,
+  .demo-steps li {
+    animation: none !important;
+  }
+  .demo-pan { transform: translate(-182px, -45px); }
+  .demo-hand,
+  .demo-btn { opacity: 0; }
+  .demo-steps li { color: var(--fg); }
+}
+
+/* credits: one line until opened */
+.credits {
+  margin-top: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.credits summary {
+  cursor: pointer;
+  padding: 4px 0;
+}
+
+.credits p {
+  margin: 4px 0 0;
+}
+
+/* the ring while placing: drawn in screen space so it never trails the map */
+.ring-overlay {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.ring-overlay path {
+  fill: rgba(228, 87, 46, 0.12);
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linejoin: round;
+}

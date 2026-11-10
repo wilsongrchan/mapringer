@@ -43,6 +43,21 @@ describe("puzzles", () => {
     }
   });
 
+  it("mixes in occasional twist puzzles that stay reachable", () => {
+    const twists = Array.from({ length: 2000 }, (_, i) => puzzleFor(i + 1)).filter((p) => p.twist);
+    expect(twists.length / 2000).toBeGreaterThan(0.08);
+    expect(twists.length / 2000).toBeLessThan(0.17);
+    for (const p of twists) {
+      if (p.twist === "empty-giant") {
+        expect(p.radiusKm).toBeGreaterThanOrEqual(500);
+        expect(p.target).toBeLessThanOrEqual(20_000);
+      } else {
+        expect(p.radiusKm).toBeLessThanOrEqual(5);
+        expect(p.target).toBeLessThan(p.radiusKm === 3 ? 3_980_000 : 6_930_000);
+      }
+    }
+  });
+
   it("rounds and scores", () => {
     expect(niceRound(48_213)).toBe(48_000);
     expect(accuracy(100, 100)).toBe(100);
@@ -162,6 +177,8 @@ describe.skipIf(!existsSync(DATA))("closest answer search", async () => {
     ["Paris, 300 km, 20M", { lat: 48.85, lng: 2.35 }, 300, 20_000_000],
     ["Sahara, 1000 km, 100M", { lat: 23, lng: 10 }, 1000, 100_000_000],
     ["N. India, 1000 km, 600M", { lat: 26, lng: 83 }, 1000, 600_000_000],
+    ["Pacific, 1000 km, 3k (twist)", { lat: -20, lng: -140 }, 1000, 3_000],
+    ["Mumbai, 3 km, 1.5M (twist)", { lat: 19.07, lng: 72.88 }, 3, 1_500_000],
   ];
   for (const [name, player, r, target] of cases) {
     it(name, async () => {
