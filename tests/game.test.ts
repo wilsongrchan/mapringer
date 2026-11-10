@@ -50,6 +50,25 @@ describe("people counts", async () => {
   });
 });
 
+describe("sea names (where the place lookup finds nothing)", async () => {
+  const { seaName } = await import("../src/seas");
+  it("names seas and straits, smallest first", () => {
+    expect(seaName({ lat: 50.2, lng: -1 }, "zh")).toBe("英吉利海峽");
+    expect(seaName({ lat: 12, lng: 114 }, "zh")).toBe("南中國海");
+    expect(seaName({ lat: 9, lng: 102 }, "en")).toBe("Gulf of Thailand");
+    expect(seaName({ lat: 15, lng: 88 }, "zh")).toBe("孟加拉灣");
+    expect(seaName({ lat: 58, lng: 179 }, "en")).toBe("Bering Sea"); // across the 180° line
+  });
+  it("falls back to the ocean", () => {
+    expect(seaName({ lat: -20, lng: -140 }, "zh")).toBe("南太平洋");
+    expect(seaName({ lat: 30, lng: -160 }, "zh")).toBe("北太平洋");
+    expect(seaName({ lat: -20, lng: 75 }, "zh")).toBe("印度洋");
+    expect(seaName({ lat: 35, lng: -40 }, "zh")).toBe("北大西洋");
+    expect(seaName({ lat: -30, lng: -20 }, "zh")).toBe("南大西洋");
+    expect(seaName({ lat: 80, lng: 0 }, "en")).toBe("Arctic Ocean");
+  });
+});
+
 describe("puzzles", () => {
   it("numbers days from launch", () => {
     expect(puzzleNumber(new Date(2026, 10, 9, 8))).toBe(1);
@@ -92,14 +111,20 @@ describe("puzzles", () => {
 
   it("grades rings into four levels, or pass / fail without the quest", () => {
     expect(STAGES.map((s) => s.max)).toEqual([80, 100, 150]);
-    expect([95, 75, 50, 10].map((sc) => levelOf(sc).emoji)).toEqual(["🎯", "🟠", "🟡", "⚪"]);
+    expect([99, 75, 50, 10].map((sc) => levelOf(sc).emoji)).toEqual(["🎯", "🟠", "🟡", "⚪"]);
+    // the cut-offs in "times off": 🎯 within 15%, 🟠 up to 2×
+    expect(levelOf(score(114, 100)).emoji).toBe("🎯");
+    expect(levelOf(score(100, 115)).emoji).toBe("🎯");
+    expect(levelOf(score(117, 100)).emoji).toBe("🟠");
+    expect(levelOf(score(199, 100)).emoji).toBe("🟠");
+    expect(levelOf(score(50, 101)).emoji).toBe("🟡");
     // ring 1 (no quest): straight levels
-    expect(gradeRing(0, 97, false, false)).toMatchObject({ grade: "bullseye", points: 80 });
+    expect(gradeRing(0, 99, false, false)).toMatchObject({ grade: "bullseye", points: 80 });
     expect(gradeRing(0, 80, false, false)).toMatchObject({ grade: "good", points: 60 });
     expect(gradeRing(0, 50, false, false)).toMatchObject({ grade: "meh", points: 32 });
     expect(gradeRing(0, 20, false, false)).toMatchObject({ grade: "bad", points: 0 });
     // quest done: levels at full scale
-    expect(gradeRing(2, 92, true, true)).toMatchObject({ grade: "bullseye", emoji: "🎯", points: 150 });
+    expect(gradeRing(2, 98, true, true)).toMatchObject({ grade: "bullseye", emoji: "🎯", points: 150 });
     expect(gradeRing(1, 75, true, true)).toMatchObject({ grade: "good", points: 75 });
     // quest not done: pass (60+) for half, else fail
     expect(gradeRing(1, 99, true, false)).toMatchObject({ grade: "pass", emoji: "🌙", points: 50 });

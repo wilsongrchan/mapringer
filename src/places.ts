@@ -1,5 +1,6 @@
 import type { LngLat } from "./geo";
-import { LANG, PLACE_LANG, t } from "./i18n";
+import { LANG, PLACE_LANG } from "./i18n";
+import { seaName } from "./seas";
 
 /**
  * Reverse-geocode a point to "Town, Country" using OpenStreetMap Nominatim.
@@ -39,7 +40,8 @@ async function lookup(p: LngLat): Promise<string> {
   const res = await fetch(url, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`Nominatim ${res.status}`);
   const data = (await res.json()) as { address?: NominatimAddress; error?: string };
-  return format(data.address) || t("unnamed");
+  // nothing on land here: name the sea or ocean instead ("South China Sea", 南太平洋…)
+  return format(data.address) || seaName(p, LANG);
 }
 
 export function placeName(p: LngLat): Promise<string> {

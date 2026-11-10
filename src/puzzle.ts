@@ -163,9 +163,14 @@ export function ratioForScore(s: number): number {
  * Each level is worth a fixed share of the ring's max points. Tweak here.
  */
 export type Level = "bullseye" | "good" | "meh" | "bad";
+// The level cut-offs, as "how many times off the target": 🎯 within 15%,
+// 🟠 up to double or half, 🟡 up to ~4.75× (a score of 40). Tweak here.
+const BULLSEYE_WITHIN = 1.15;
+const GOOD_WITHIN = 2;
+const minScore = (timesOff: number) => score(timesOff, 1) - 1e-9; // (exactly on the line counts)
 export const LEVELS: { level: Level; min: number; share: number; emoji: string; color: string }[] = [
-  { level: "bullseye", min: 90, share: 1, emoji: "🎯", color: "#e4572e" },
-  { level: "good", min: 70, share: 0.75, emoji: "🟠", color: "#f08a5d" },
+  { level: "bullseye", min: minScore(BULLSEYE_WITHIN), share: 1, emoji: "🎯", color: "#e4572e" },
+  { level: "good", min: minScore(GOOD_WITHIN), share: 0.75, emoji: "🟠", color: "#f08a5d" },
   { level: "meh", min: 40, share: 0.4, emoji: "🟡", color: "#f6c343" },
   { level: "bad", min: 0, share: 0, emoji: "⚪", color: "#ffffff" },
 ];

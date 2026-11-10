@@ -127,6 +127,9 @@ const en = {
   onTarget: "Right on target",
   tooMany: (v: Vars) => `${v.amount} too many people`,
   tooFew: (v: Vars) => `${v.amount} too few people`,
+  // close rings (🎯 / 🟠) sound encouraging
+  onlyTooMany: (v: Vars) => `Only ${v.amount} too many people`,
+  onlyTooFew: (v: Vars) => `Only ${v.amount} too few people`,
 
   searching: "Finding closest ring…",
   foundSelf: "Your ring hits it!",
@@ -246,6 +249,8 @@ const zh: Record<Key, Entry> = {
   onTarget: "正中目標",
   tooMany: (v) => `人數多了 ${v.amount}`,
   tooFew: (v) => `人數少了 ${v.amount}`,
+  onlyTooMany: (v) => `只多了 ${v.amount}`,
+  onlyTooFew: (v) => `只少了 ${v.amount}`,
 
   searching: "正在尋找最接近的圈…",
   foundSelf: "你的圈正中目標！",

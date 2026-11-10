@@ -18,6 +18,7 @@ import {
   fmt,
   fmtPoints,
   gradeRing,
+  levelOf,
   msUntilNextPuzzle,
   PASS_SCORE,
   PASS_SHARE,
@@ -692,7 +693,9 @@ function gaugeCaption(r: Result): string {
   const over = ratio > 1;
   const factor = over ? ratio : 1 / ratio;
   const amount = factor < 2 ? `${Math.round((factor - 1) * 100)}%` : `${factor < 10 ? factor.toFixed(1) : fmt(factor)}×`;
-  return t(over ? "tooMany" : "tooFew", { amount });
+  // a 🎯 or 🟠 ring was close: "Only 30% too many people" / 「只多了 30%」
+  const close = ["bullseye", "good"].includes(levelOf(r.score).level);
+  return t(close ? (over ? "onlyTooMany" : "onlyTooFew") : over ? "tooMany" : "tooFew", { amount });
 }
 
 function renderGauge(r: Result, animate: boolean) {
