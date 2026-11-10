@@ -8,7 +8,7 @@ export interface Result {
   accuracy: number; // plain closeness (min/max ratio)
   score: number; // player-facing log score (0–100)
   difficulty: Difficulty;
-  points: number; // score × difficulty multiplier + side-quest bonus
+  points: number; // (score + side-quest bonus) × difficulty multiplier (older saves: score × multiplier + bonus)
   questDone?: boolean; // side quest condition met
   bonus?: number; // side-quest points actually earned
 }

@@ -108,20 +108,61 @@ function globe(style: StyleSpec): StyleSpec {
   };
 }
 
+/** The game's own sources and layers (ring, answer, quest line…), on top of any base map. */
+export type GameLayers = () => { sources: StyleSpec["sources"]; layers: LayerSpec[] };
+
+// Each base style is fetched once; switching difficulty then reuses it.
+const styleCache = new Map<string, Promise<StyleSpec>>();
+function baseStyle(url: string): Promise<StyleSpec> {
+  let p = styleCache.get(url);
+  if (!p) {
+    p = fetch(url).then((r) => {
+      if (!r.ok) throw new Error(`style ${r.status}`);
+      return r.json() as Promise<StyleSpec>;
+    });
+    p.catch(() => styleCache.delete(url)); // allow a retry
+    styleCache.set(url, p);
+  }
+  return p;
+}
+
+/** Start downloading the styles we'll switch to, so the first switch is quick. */
+export function prefetchStyles(): void {
+  for (const name of ["positron", "liberty"]) baseStyle(`${OFM}/${name}`).catch(() => {});
+}
+
+let styleRequest = 0; // a newer switch wins over a slower, older one
+
+/**
+ * Swap the base map. All our styles share the same OpenMapTiles source, so
+ * the change is applied as a diff: tiles already loaded are kept and only the
+ * layers change, instead of tearing the whole map down and refetching it.
+ * Resolves once the new style has been handed to the map.
+ */
+async function swapStyle(map: maplibregl.Map, url: string, transform: (s: StyleSpec) => StyleSpec, lang: Lang, game: GameLayers, diff = true): Promise<void> {
+  const req = ++styleRequest;
+  const base = structuredClone(await baseStyle(url));
+  if (req !== styleRequest) return;
+  const localise = lang === "zh" ? chineseLabels : (s: StyleSpec) => s;
+  const style = globe(localise(transform(base)));
+  const own = game();
+  style.sources = { ...style.sources, ...own.sources };
+  style.layers = [...style.layers, ...own.layers];
+  map.setStyle(style, { diff });
+}
+
 /**
  * After locking in on Hard or Standard, lift the "fog of war": switch to the
  * full-colour Liberty map (blue water, yellow roads, green forests, all labels).
  */
-export function applyRevealStyle(map: maplibregl.Map, lang: Lang = "en"): void {
-  const localise = lang === "zh" ? chineseLabels : (s: StyleSpec) => s;
-  map.setStyle(`${OFM}/liberty`, { diff: false, transformStyle: (_prev, next) => globe(localise(next)) });
+export function applyRevealStyle(map: maplibregl.Map, lang: Lang, game: GameLayers): Promise<void> {
+  return swapStyle(map, `${OFM}/liberty`, (s) => s, lang, game);
 }
 
-export function applyMapStyle(map: maplibregl.Map, d: Difficulty, lang: Lang = "en"): void {
+export function applyMapStyle(map: maplibregl.Map, d: Difficulty, lang: Lang, game: GameLayers, diff = true): Promise<void> {
   const url = d === "easy" ? `${OFM}/liberty` : `${OFM}/positron`;
   const transform = d === "easy" ? satellite : d === "hard" ? blank : noRoads;
-  const localise = lang === "zh" ? chineseLabels : (s: StyleSpec) => s;
-  map.setStyle(url, { diff: false, transformStyle: (_prev, next) => globe(localise(transform(next))) });
+  return swapStyle(map, url, transform, lang, game, diff);
 }
 
 export function loadDifficulty(): Difficulty {

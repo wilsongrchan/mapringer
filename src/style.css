@@ -11,6 +11,7 @@
   --radius: 16px;
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --header-h: 52px;
   color-scheme: light;
 }
 
@@ -87,20 +88,22 @@ a {
   color: var(--accent);
 }
 
-/* ---- top ---- */
+/* ---- top: one header bar (logo left, settings right), under the notch ---- */
 .topbar {
   position: fixed;
-  top: calc(var(--safe-top) + 12px);
-  left: 16px;
-  right: 16px;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: calc(var(--safe-top) + var(--header-h));
+  padding: var(--safe-top) 16px 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  pointer-events: none;
-}
-
-.topbar > * {
-  pointer-events: auto;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 1px 10px rgba(0, 0, 0, 0.08);
+  backdrop-filter: blur(8px);
+  z-index: 2;
 }
 
 .brand {
@@ -109,11 +112,6 @@ a {
   gap: 8px;
   font-weight: 700;
   font-size: 18px;
-  background: var(--card);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
-  padding: 8px 14px 8px 10px;
-  border-radius: 999px;
 }
 
 .brand svg {
@@ -131,18 +129,18 @@ a {
 }
 
 .icon-btn {
-  width: 40px;
-  height: 40px;
+  width: 36px;
+  height: 36px;
   padding: 0;
   border-radius: 999px;
-  background: var(--card);
-  box-shadow: var(--shadow);
+  border: none;
+  background: var(--border);
   font-weight: 700;
 }
 
 .challenge {
   position: fixed;
-  top: calc(var(--safe-top) + 64px);
+  top: calc(var(--safe-top) + var(--header-h) + 12px);
   left: 50%;
   transform: translateX(-50%);
   width: min(440px, calc(100% - 32px));
@@ -546,14 +544,14 @@ dialog ol {
   }
 
   .showing-result .challenge {
-    top: calc(var(--safe-top) + 68px);
+    top: calc(var(--safe-top) + var(--header-h) + 12px);
     text-align: left;
   }
 
   .showing-result .bottom {
-    top: calc(var(--safe-top) + 156px);
+    top: calc(var(--safe-top) + var(--header-h) + 100px);
     bottom: auto;
-    max-height: calc(100vh - var(--safe-top) - 172px);
+    max-height: calc(100vh - var(--safe-top) - var(--header-h) - 116px);
     overflow-y: auto;
     border-radius: var(--radius);
   }
@@ -943,16 +941,17 @@ dialog {
 
 /* ---- phones: smaller panels so the map gets most of the screen ---- */
 @media (max-width: 799px) {
+  :root {
+    --header-h: 44px;
+  }
+
   .topbar {
-    top: calc(var(--safe-top) + 8px);
-    left: 12px;
-    right: 12px;
+    padding: var(--safe-top) 12px 0;
   }
 
   .brand {
     font-size: 16px;
     gap: 6px;
-    padding: 6px 12px 6px 8px;
   }
 
   .brand svg {
@@ -965,14 +964,19 @@ dialog {
   }
 
   .icon-btn {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
   }
 
   .challenge {
-    top: calc(var(--safe-top) + 52px);
+    top: calc(var(--safe-top) + var(--header-h) + 8px);
     width: calc(100% - 24px);
-    padding: 7px 12px 8px;
+    padding: 6px 12px 7px;
+  }
+
+  .quest {
+    font-size: 12px;
   }
 
   /* the challenge line already says it's today's ring; twists keep their label */
@@ -985,7 +989,11 @@ dialog {
   }
 
   .quest {
-    margin-top: 3px;
+    margin-top: 2px;
+  }
+
+  .quest summary {
+    padding: 1px 9px;
   }
 
   .bottom {

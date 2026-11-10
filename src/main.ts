@@ -6,7 +6,7 @@ import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&ur
 import "./style.css";
 import { applyStaticText, LANG, people, switchLanguage, t } from "./i18n";
 import { findClosestAnswer, MATCH_ACCURACY, type AnswerResult } from "./answer";
-import { applyMapStyle, applyRevealStyle, DIFFICULTIES, DIFFICULTY_ORDER, GLOBE, type Difficulty } from "./difficulty";
+import { applyMapStyle, applyRevealStyle, DIFFICULTIES, DIFFICULTY_ORDER, GLOBE, prefetchStyles, type Difficulty, type GameLayers } from "./difficulty";
 import { circleRing, type LngLat } from "./geo";
 import { coords, placeName } from "./places";
 import { BONUS_MIN_SCORE, questBonus, questDone, questFor, surveyRing, type Quest } from "./quests";
@@ -29,6 +29,18 @@ let puzzle: Puzzle = dayParam > 0 ? puzzleFor(dayParam) : todaysPuzzle();
 let practice = false; // true once we've moved on to random puzzles
 
 const COLOR = { ring: "#e4572e", good: "#2a9d8f" };
+/** Side-quest hint colours, one per continent (so where two meet is easy to see). */
+const CONTINENT_COLOR = [
+  "match",
+  ["get", "continent"],
+  "africa", "#d98e04",
+  "asia", "#c8414b",
+  "europe", "#3d7cc9",
+  "northAmerica", "#8a5cc2",
+  "southAmerica", "#2f9e44",
+  "oceania", "#0f9e99",
+  "#888888",
+] as unknown as maplibregl.ExpressionSpecification;
 
 preloadPopulation();
 
@@ -54,13 +66,15 @@ const map = new maplibregl.Map({
   attributionControl: { compact: true },
   dragRotate: false,
   pitchWithRotate: false,
-  // lets the reveal transition snapshot the pre-lock map
-  canvasContextAttributes: { preserveDrawingBuffer: true },
 });
+// a longer, softer glide after a flick, so spinning the globe feels smooth
+map.dragPan.enable({ linearity: 0.22, deceleration: 1300, maxSpeed: 2400, easing: (t) => 1 - (1 - t) ** 3 });
 map.touchZoomRotate.disableRotation();
 map.keyboard.disableRotation();
 if (import.meta.env.DEV) (window as unknown as { __map: maplibregl.Map }).__map = map; // for debugging
-applyMapStyle(map, difficulty, LANG);
+prefetchStyles();
+// (the first style is a full load; gameLayers is defined below)
+queueMicrotask(() => applyMapStyle(map, difficulty, LANG, gameLayers, false));
 
 /** "an 8 km ring", "an 80 km ring", "an 11 km ring", otherwise "a …". */
 const article = (n: number) => (String(n).startsWith("8") || n === 11 || n === 18 ? "an" : "a");
@@ -71,7 +85,8 @@ function fitOneLine(el: HTMLElement, maxPx: number, minPx = 11) {
   for (let px = maxPx; px > minPx && el.scrollWidth > el.clientWidth; px -= 0.5) el.style.fontSize = `${px - 0.5}px`;
 }
 
-const fitChallenge = () => fitOneLine($("challenge-line"), 19);
+// the question line: 19px on wide screens, 16px on phones (shrinks further to fit)
+const fitChallenge = () => fitOneLine($("challenge-line"), matchMedia("(min-width: 800px)").matches ? 19 : 16);
 
 let quest: Quest = questFor(puzzle);
 
@@ -79,10 +94,17 @@ function questText(q: Quest): string {
   return q.kind === "continent" ? t("questContinent", { continent: t(q.continent) }) : t(q.kind === "equator" ? "questEquator" : q.kind === "landlocked" ? "questLandlocked" : q.kind === "islandsOnly" ? "questIslands" : "questTwoContinents");
 }
 
+/**
+ * Side-quest hints on the map: the equator, the target continent, every
+ * continent (to see where they meet), or the islands. Shown on Easy and
+ * Standard; Hard gets no hints until the ring is locked in.
+ */
+const showHints = () => difficulty !== "hard" || !!locked;
+
 /** Map lines that go with the day's quest (just the equator, for now). */
 function questLines() {
   const features =
-    quest.kind === "equator"
+    showHints() && quest.kind === "equator"
       ? [
           {
             type: "Feature" as const,
@@ -94,8 +116,46 @@ function questLines() {
   return { type: "FeatureCollection" as const, features };
 }
 
+type AreaFC = { type: "FeatureCollection"; features: { type: "Feature"; properties: { continent: string; island: boolean }; geometry: object }[] };
+const NO_AREAS: AreaFC = { type: "FeatureCollection", features: [] };
+let areasData: AreaFC = NO_AREAS;
+let continentsGeo: Promise<AreaFC> | null = null; // built from the land mask by scripts/build_hints.py
+
+/** Which continent / island shapes the current quest's hint shows. */
+function questAreaFilter(): ((f: AreaFC["features"][number]) => boolean) | null {
+  if (!showHints()) return null;
+  if (quest.kind === "continent") {
+    const c: string = quest.continent;
+    return (f) => f.properties.continent === c;
+  }
+  if (quest.kind === "twoContinents") return () => true;
+  if (quest.kind === "islandsOnly") return (f) => f.properties.island;
+  return null;
+}
+
+/** Redraw the quest hints for the current quest, difficulty and lock state. */
+function refreshHints() {
+  (map.getSource("quest-lines") as maplibregl.GeoJSONSource | undefined)?.setData(questLines());
+  const keep = questAreaFilter();
+  const myQuest = quest;
+  const apply = (fc: AreaFC) => {
+    areasData = fc;
+    (map.getSource("quest-areas") as maplibregl.GeoJSONSource | undefined)?.setData(fc);
+  };
+  if (!keep) return apply(NO_AREAS);
+  continentsGeo ??= fetch(`${import.meta.env.BASE_URL}hints/continents.geojson`).then((r) => r.json() as Promise<AreaFC>);
+  continentsGeo
+    .then((all) => {
+      // still the same quest and still allowed to hint?
+      if (quest === myQuest && questAreaFilter()) apply({ type: "FeatureCollection", features: all.features.filter(keep) });
+    })
+    .catch(() => {
+      continentsGeo = null; // a hint is optional; try again next time
+    });
+}
+
 function renderQuest() {
-  (map?.getSource("quest-lines") as maplibregl.GeoJSONSource | undefined)?.setData(questLines());
+  refreshHints();
   $("quest-bonus").textContent = `+${quest.bonus}`;
   $("quest-text").textContent = `${questText(quest)} ${t("questRule", { min: BONUS_MIN_SCORE })}`;
 }
@@ -144,6 +204,7 @@ function circleFeature(center: LngLat, radiusKm: number): Feature {
 
 function setData(source: string, data: Feature | typeof EMPTY) {
   if (source === "answer") answerData = data;
+  if (source === "ring") ringData = data;
   (map.getSource(source) as maplibregl.GeoJSONSource | undefined)?.setData(data);
 }
 
@@ -173,6 +234,7 @@ function updateRing() {
 }
 
 let answerData: Feature | typeof EMPTY = EMPTY;
+let ringData: Feature | typeof EMPTY = EMPTY;
 type PointFC = { type: "FeatureCollection"; features: { type: "Feature"; properties: { kind: string }; geometry: { type: "Point"; coordinates: [number, number] } }[] };
 let centerData: PointFC = { type: "FeatureCollection", features: [] };
 
@@ -189,55 +251,80 @@ function setCenters(points: { kind: "mine" | "answer"; at: LngLat }[]) {
   (map.getSource("centers") as maplibregl.GeoJSONSource | undefined)?.setData(centerData);
 }
 
-// Our ring layers live on top of whichever base style is active, so they are
-// (re-)added every time the style loads (i.e. on difficulty changes).
-map.on("style.load", () => {
-  map.addSource("ring", { type: "geojson", data: circleFeature(map.getCenter(), puzzle.radiusKm) });
-  map.addSource("answer", { type: "geojson", data: answerData });
+// Our ring layers live on top of whichever base style is active. Every style
+// switch carries them across (see swapStyle in difficulty.ts) with their
+// current data; style.load adds them if a full reload dropped them.
+const gameLayers: GameLayers = () => ({
+  sources: {
+    ring: { type: "geojson", data: ringData },
+    answer: { type: "geojson", data: answerData },
+    "quest-lines": { type: "geojson", data: questLines() },
+    "quest-areas": { type: "geojson", data: areasData },
+    centers: { type: "geojson", data: centerData },
+  },
+  layers: [
+    {
+      id: "quest-area-fill",
+      type: "fill",
+      source: "quest-areas",
+      paint: { "fill-color": CONTINENT_COLOR, "fill-opacity": 0.2 },
+    },
+    {
+      id: "quest-area-line",
+      type: "line",
+      source: "quest-areas",
+      paint: { "line-color": CONTINENT_COLOR, "line-width": 1.2, "line-opacity": 0.8 },
+    },
+    { id: "ring-fill", type: "fill", source: "ring", paint: { "fill-color": COLOR.ring, "fill-opacity": 0.12 } },
+    { id: "answer-fill", type: "fill", source: "answer", paint: { "fill-color": COLOR.good, "fill-opacity": 0.15 } },
+    {
+      id: "answer-line",
+      type: "line",
+      source: "answer",
+      paint: { "line-color": COLOR.good, "line-width": 3, "line-dasharray": [2, 1.5] },
+    },
+    { id: "ring-line", type: "line", source: "ring", paint: { "line-color": COLOR.ring, "line-width": 3 } },
+    // the equator, drawn when today's side quest is to cross it
+    {
+      id: "quest-line",
+      type: "line",
+      source: "quest-lines",
+      paint: { "line-color": "#c48a00", "line-width": 2, "line-dasharray": [4, 3], "line-opacity": 0.85 },
+    },
+    {
+      id: "quest-line-label",
+      type: "symbol",
+      source: "quest-lines",
+      layout: {
+        "symbol-placement": "line",
+        "symbol-spacing": 400,
+        "text-field": ["get", "name"],
+        "text-font": ["Noto Sans Regular"],
+        "text-size": 12,
+        "text-offset": [0, -0.8],
+      },
+      paint: { "text-color": "#8a6100", "text-halo-color": "rgba(255,255,255,0.9)", "text-halo-width": 1.5 },
+    },
+    {
+      id: "centers",
+      type: "circle",
+      source: "centers",
+      paint: {
+        "circle-radius": 6,
+        "circle-color": ["match", ["get", "kind"], "answer", COLOR.good, COLOR.ring],
+        "circle-stroke-color": "#ffffff",
+        "circle-stroke-width": 2.5,
+      },
+    },
+  ],
+});
 
-  map.addLayer({ id: "ring-fill", type: "fill", source: "ring", paint: { "fill-color": COLOR.ring, "fill-opacity": 0.12 } });
-  map.addLayer({ id: "answer-fill", type: "fill", source: "answer", paint: { "fill-color": COLOR.good, "fill-opacity": 0.15 } });
-  map.addLayer({
-    id: "answer-line",
-    type: "line",
-    source: "answer",
-    paint: { "line-color": COLOR.good, "line-width": 3, "line-dasharray": [2, 1.5] },
-  });
-  map.addLayer({ id: "ring-line", type: "line", source: "ring", paint: { "line-color": COLOR.ring, "line-width": 3 } });
-  // the equator, drawn when today's side quest is to cross it
-  map.addSource("quest-lines", { type: "geojson", data: questLines() });
-  map.addLayer({
-    id: "quest-line",
-    type: "line",
-    source: "quest-lines",
-    paint: { "line-color": "#c48a00", "line-width": 2, "line-dasharray": [4, 3], "line-opacity": 0.85 },
-  });
-  map.addLayer({
-    id: "quest-line-label",
-    type: "symbol",
-    source: "quest-lines",
-    layout: {
-      "symbol-placement": "line",
-      "symbol-spacing": 400,
-      "text-field": ["get", "name"],
-      "text-font": ["Noto Sans Regular"],
-      "text-size": 12,
-      "text-offset": [0, -0.8],
-    },
-    paint: { "text-color": "#8a6100", "text-halo-color": "rgba(255,255,255,0.9)", "text-halo-width": 1.5 },
-  });
-  map.addSource("centers", { type: "geojson", data: centerData });
-  map.addLayer({
-    id: "centers",
-    type: "circle",
-    source: "centers",
-    paint: {
-      "circle-radius": 6,
-      "circle-color": ["match", ["get", "kind"], "answer", COLOR.good, COLOR.ring],
-      "circle-stroke-color": "#ffffff",
-      "circle-stroke-width": 2.5,
-    },
-  });
+map.on("style.load", () => {
+  if (!map.getSource("ring")) {
+    const { sources, layers } = gameLayers();
+    for (const [id, src] of Object.entries(sources)) map.addSource(id, src);
+    for (const l of layers) map.addLayer(l);
+  }
   updateRing();
 });
 
@@ -293,8 +380,9 @@ $("difficulty").addEventListener("click", async (e) => {
   if (DIFFICULTY_ORDER.indexOf(d) > DIFFICULTY_ORDER.indexOf(difficulty)) return; // no going back up
   if (!(await confirmEasier(d)) || difficultyLocked || locked) return;
   difficulty = d;
-  applyMapStyle(map, d, LANG);
+  applyMapStyle(map, d, LANG, gameLayers);
   renderDifficulty();
+  refreshHints();
 });
 
 map.on("movestart", (e) => {
@@ -336,7 +424,8 @@ lockBtn.addEventListener("click", async () => {
       difficulty,
       questDone: done,
       bonus,
-      points: s * DIFFICULTIES[difficulty].multiplier + bonus,
+      // the side-quest bonus is added first, so the map multiplier applies to it too
+      points: (s + bonus) * DIFFICULTIES[difficulty].multiplier,
     };
     if (!UNLIMITED) saveResult(result);
     locked = result;
@@ -539,7 +628,7 @@ function revealMap(r: Result, animate: boolean) {
   if (revealed || r.difficulty === "easy") return;
   revealed = true;
   if (!animate) {
-    applyRevealStyle(map, LANG);
+    applyRevealStyle(map, LANG, gameLayers);
     return;
   }
   revealDone = revealWipe(map.project([r.lng, r.lat])).catch((e) => {
@@ -557,24 +646,25 @@ async function revealWipe(at: { x: number; y: number }) {
   const src = map.getCanvas();
   snap.width = src.width;
   snap.height = src.height;
-  snap.getContext("2d")!.drawImage(src, 0, 0);
+  // Without preserveDrawingBuffer the WebGL canvas can only be copied inside
+  // the frame that drew it, so grab it from a render event.
+  await new Promise<void>((resolve) => {
+    map.once("render", () => {
+      snap.getContext("2d")!.drawImage(src, 0, 0);
+      resolve();
+    });
+    map.triggerRepaint();
+  });
   setMask(snap, "none");
   snap.hidden = false;
   holdOverlay = true;
   updateRing();
   drawOverlay();
 
-  applyRevealStyle(map, LANG);
   // wait for the colour map to draw, but not long: slow tiles can fill in as the wipe opens
-  await new Promise<void>((resolve) => {
-    const timer = setTimeout(resolve, 1200);
-    map.once("style.load", () =>
-      map.once("idle", () => {
-        clearTimeout(timer);
-        resolve();
-      }),
-    );
-  });
+  const timer = new Promise<void>((resolve) => setTimeout(resolve, 1200));
+  await Promise.race([applyRevealStyle(map, LANG, gameLayers), timer]);
+  await Promise.race([new Promise<void>((resolve) => map.once("idle", () => resolve())), timer]);
 
   const feather = 60;
   const maxR = Math.hypot(Math.max(at.x, innerWidth - at.x), Math.max(at.y, innerHeight - at.y)) + feather;
@@ -608,6 +698,7 @@ function showResult(r: Result, animate: boolean) {
   const center = { lng: r.lng, lat: r.lat };
   // start the reveal before the layout shifts the map, so the snapshot lines up
   revealMap(r, animate);
+  refreshHints(); // locked in: the quest's hint shows on every difficulty
   $("play-panel").hidden = true;
   $("result-panel").hidden = false;
   setResultLayout(true);
@@ -637,7 +728,7 @@ function showResult(r: Result, animate: boolean) {
   $("result-points").innerHTML = plain
     ? ""
     : t("points", {
-        parts: [mult !== 1 ? `×${mult}` : "", bonus ? `+${bonus}★` : ""].filter(Boolean).join(" "),
+        parts: [bonus ? `+${bonus}★` : "", mult !== 1 ? `×${mult}` : ""].filter(Boolean).join(" "),
         points: r.points.toFixed(1),
       });
   // Side quests are optional extras: say nothing if you didn't do it,
@@ -774,12 +865,13 @@ function resetPlay() {
   document.body.classList.remove("explored");
   if (difficulty !== "hard" || revealed) {
     difficulty = "hard";
-    applyMapStyle(map, difficulty, LANG);
+    applyMapStyle(map, difficulty, LANG, gameLayers);
   }
   revealed = false;
   holdOverlay = false;
   $("reveal-snap").hidden = true;
   renderDifficulty();
+  refreshHints();
   updateRing();
 }
 

@@ -37,6 +37,13 @@ cd ../../..
 .venv/bin/python scripts/build_landmask.py data/raw/ne public/data/land.tif
 ```
 
+The side-quest map hints (continent and island outlines, shown on Easy and Standard) are drawn from that same mask. The output is small and committed; rebuild it whenever `land.tif` changes:
+
+```sh
+.venv/bin/pip install shapely
+.venv/bin/python scripts/build_hints.py public/data/land.tif public/hints/continents.geojson
+```
+
 In dev, test mode is on by default: unlimited attempts, endless random puzzles (**New puzzle**), nothing saved. Use `?unlimited=0` for the real one-try-per-day rules and `?day=N` to play puzzle #N.
 
 In production, host both `.tif` files on storage that supports range requests and CORS (e.g. Cloudflare R2), then build with `VITE_POPULATION_BASE_URL=https://…/` (the folder holding them).
