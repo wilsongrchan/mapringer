@@ -6,10 +6,11 @@ import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&ur
 import "./style.css";
 import { applyStaticText, LANG, switchLanguage, t } from "./i18n";
 import { findClosestAnswer, MATCH_ACCURACY, type AnswerResult } from "./answer";
-import { applyMapStyle, DIFFICULTIES, DIFFICULTY_ORDER, type Difficulty } from "./difficulty";
+import { applyMapStyle, applyRevealStyle, DIFFICULTIES, DIFFICULTY_ORDER, type Difficulty } from "./difficulty";
 import { circleRing, type LngLat } from "./geo";
 import { coords, placeName } from "./places";
-import { populationInRing, preloadPopulation, readBlock } from "./population";
+import { BONUS_MIN_SCORE, questBonus, questDone, questFor, surveyRing, type Quest } from "./quests";
+import { populationInRing, preloadPopulation, readBlock, readLandBlock } from "./population";
 import { accuracy, emojiBar, ratioForScore, SCORE_BANDS, fmt, msUntilNextPuzzle, puzzleFor, score, shareText, todaysPuzzle, type Puzzle } from "./puzzle";
 import { loadResult, saveResult, type Result } from "./storage";
 
@@ -61,6 +62,17 @@ function fitOneLine(el: HTMLElement, maxPx: number, minPx = 11) {
 
 const fitChallenge = () => fitOneLine($("challenge-line"), 19);
 
+let quest: Quest = questFor(puzzle);
+
+function questText(q: Quest): string {
+  return q.kind === "continent" ? t("questContinent", { continent: t(q.continent) }) : t(q.kind === "equator" ? "questEquator" : q.kind === "landlocked" ? "questLandlocked" : q.kind === "islandsOnly" ? "questIslands" : "questTwoContinents");
+}
+
+function renderQuest() {
+  $("quest-bonus").textContent = `+${quest.bonus}`;
+  $("quest-text").textContent = `${questText(quest)} ${t("questRule", { min: BONUS_MIN_SCORE })}`;
+}
+
 function renderPuzzle() {
   $("puzzle-num").textContent = practice ? t("practiceTag") : `#${puzzle.number}${UNLIMITED ? t("testTag") : ""}`;
   $("challenge-label").textContent =
@@ -77,6 +89,7 @@ function renderPuzzle() {
     article: article(puzzle.radiusKm),
   });
   fitChallenge();
+  renderQuest();
 }
 renderPuzzle();
 addEventListener("resize", fitChallenge);
@@ -233,9 +246,27 @@ lockBtn.addEventListener("click", async () => {
   lockBtn.disabled = true;
   lockBtn.textContent = t("counting");
   try {
-    const population = await populationInRing(center, puzzle.radiusKm);
+    const [population, done] = await Promise.all([
+      populationInRing(center, puzzle.radiusKm),
+      // the side quest is a bonus: if the land data can't load, it just doesn't count
+      readLandBlock(center, puzzle.radiusKm)
+        .then((block) => questDone(quest, surveyRing(block, center, puzzle.radiusKm), center, puzzle.radiusKm))
+        .catch(() => false),
+    ]);
     if (myAttempt !== attempt) return;
-    const result: Result = { puzzle: puzzle.number, ...center, population, accuracy: accuracy(population, puzzle.target), score: score(population, puzzle.target), difficulty, points: score(population, puzzle.target) * DIFFICULTIES[difficulty].multiplier };
+    const s = score(population, puzzle.target);
+    const bonus = questBonus(quest, done, s);
+    const result: Result = {
+      puzzle: puzzle.number,
+      ...center,
+      population,
+      accuracy: accuracy(population, puzzle.target),
+      score: s,
+      difficulty,
+      questDone: done,
+      bonus,
+      points: s * DIFFICULTIES[difficulty].multiplier + bonus,
+    };
     if (!UNLIMITED) saveResult(result);
     locked = result;
     showResult(result, true);
@@ -421,12 +452,22 @@ function renderGauge(r: Result, animate: boolean) {
   gauge.style.setProperty("--fill", "1");
 }
 
+let revealed = false;
+
+/** Lift the fog: full-colour map with roads and labels once the ring is locked in. */
+function revealMap(r: Result) {
+  if (revealed || r.difficulty === "easy") return;
+  revealed = true;
+  applyRevealStyle(map, LANG);
+}
+
 function showResult(r: Result, animate: boolean) {
   const myAttempt = attempt;
   const center = { lng: r.lng, lat: r.lat };
   $("play-panel").hidden = true;
   $("result-panel").hidden = false;
   setResultLayout(true);
+  revealMap(r);
   setCollapsed(false, false);
   $("crosshair").classList.add("hidden");
   $("result-target").textContent = fmt(puzzle.target);
@@ -440,16 +481,28 @@ function showResult(r: Result, animate: boolean) {
   r.difficulty ??= "standard";
   r.points ??= r.score * DIFFICULTIES[r.difficulty].multiplier;
   const mult = DIFFICULTIES[r.difficulty].multiplier;
+  const bonus = r.bonus ?? 0;
+  const plain = mult === 1 && bonus === 0; // points equal the score
   $("result-bar").textContent = emojiBar(r.score);
   $("result-acc").textContent = `${r.score.toFixed(1)}`;
   $("result-summary").innerHTML = t("summary", {
     pop: fmt(r.population),
     bar: emojiBar(r.score),
-    score: (mult === 1 ? r.score : r.points).toFixed(1),
-    unit: mult === 1 ? "" : t("ptsUnit"),
+    score: (plain ? r.score : r.points).toFixed(1),
+    unit: plain ? "" : t("ptsUnit"),
   });
-  $("result-points").innerHTML =
-    mult === 1 ? "" : t("points", { mult, points: r.points.toFixed(1) });
+  $("result-points").innerHTML = plain
+    ? ""
+    : t("points", {
+        parts: [mult !== 1 ? `×${mult}` : "", bonus ? `+${bonus}★` : ""].filter(Boolean).join(" "),
+        points: r.points.toFixed(1),
+      });
+  // Side quests are optional extras: say nothing if you didn't do it,
+  // celebrate if you did.
+  const qr = $("quest-result");
+  qr.hidden = !r.questDone;
+  qr.className = `quest-result ${bonus ? "done" : ""}`;
+  qr.textContent = bonus ? t("questDone", { bonus }) : t("questDoneLowScore", { min: BONUS_MIN_SCORE });
   $("result-verdict").textContent = verdict(r);
   updateRing();
   setCenters([{ kind: "mine", at: center }]);
@@ -570,10 +623,11 @@ function resetPlay() {
   setCenters([]);
   // every new attempt starts back on Hard
   difficultyLocked = false;
-  if (difficulty !== "hard") {
+  if (difficulty !== "hard" || revealed) {
     difficulty = "hard";
     applyMapStyle(map, difficulty, LANG);
   }
+  revealed = false;
   renderDifficulty();
   updateRing();
 }
@@ -582,6 +636,7 @@ $("again-btn").addEventListener("click", resetPlay);
 $("new-btn").addEventListener("click", () => {
   practice = true;
   puzzle = puzzleFor(1000 + Math.floor(Math.random() * 1e9));
+  quest = questFor(puzzle);
   renderPuzzle();
   resetPlay();
 });
@@ -595,7 +650,7 @@ $("share-btn").addEventListener("click", async () => {
     location.origin + location.pathname,
     (v) => t("shareTitle", v),
     DIFFICULTIES[locked.difficulty].label,
-    t("ptsUnit"),
+    `${t("ptsUnit")}${locked.bonus ? " ★" : ""}`,
   );
   try {
     if (navigator.share && matchMedia("(pointer: coarse)").matches) {

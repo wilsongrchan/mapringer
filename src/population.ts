@@ -5,6 +5,8 @@ const BASE = import.meta.env.VITE_POPULATION_BASE_URL ?? `${import.meta.env.BASE
 /** 30 arc-second (~1 km) grid, and a 10x coarser (~10 km) grid of summed cells. */
 const FINE_URL = `${BASE}population.tif`;
 const COARSE_URL = `${BASE}population_10x.tif`;
+/** Land / island / continent mask for side quests (1 arc-minute grid). */
+const LAND_URL = `${BASE}land.tif`;
 /** Rings at least this big are counted on the coarse grid. */
 export const COARSE_FROM_KM = 100;
 
@@ -40,7 +42,15 @@ export function preloadPopulation(): void {
  * at the resolution used for rings of size `ringKm`.
  */
 export async function readBlock(center: LngLat, radiusKm: number, ringKm: number): Promise<Block> {
-  const { image, grid } = await sourceFor(ringKm);
+  return readFrom(await sourceFor(ringKm), center, radiusKm);
+}
+
+/** Land-mask cells within `radiusKm` of `center` (see quests.ts for the codes). */
+export async function readLandBlock(center: LngLat, radiusKm: number): Promise<Block> {
+  return readFrom(await load(LAND_URL), center, radiusKm);
+}
+
+async function readFrom({ image, grid }: Source, center: LngLat, radiusKm: number): Promise<Block> {
   const segments = circleWindows(grid, center, radiusKm);
   if (!segments.length) return { grid, row0: 0, col0: 0, rows: 0, cols: 0, values: new Float32Array(0) };
   const { row0, rows } = segments[0].window;

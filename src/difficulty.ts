@@ -93,6 +93,15 @@ function chineseLabels(style: StyleSpec): StyleSpec {
   };
 }
 
+/**
+ * After locking in on Hard or Standard, lift the "fog of war": switch to the
+ * full-colour Liberty map (blue water, yellow roads, green forests, all labels).
+ */
+export function applyRevealStyle(map: maplibregl.Map, lang: Lang = "en"): void {
+  const localise = lang === "zh" ? chineseLabels : (s: StyleSpec) => s;
+  map.setStyle(`${OFM}/liberty`, { diff: false, transformStyle: (_prev, next) => localise(next) });
+}
+
 export function applyMapStyle(map: maplibregl.Map, d: Difficulty, lang: Lang = "en"): void {
   const url = d === "easy" ? `${OFM}/liberty` : `${OFM}/positron`;
   const transform = d === "easy" ? satellite : d === "hard" ? blank : noRoads;

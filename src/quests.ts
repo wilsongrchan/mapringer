@@ -1,0 +1,123 @@
+import { haversineKm, KM_PER_DEG, type Block, type LngLat } from "./geo";
+import type { Puzzle } from "./puzzle";
+
+/**
+ * Side quests: an optional extra condition on the day's ring, worth a few
+ * bonus points. Checked against the land mask (public/data/land.tif):
+ *   0 = sea, 16 | continent = mainland, 16 | 8 | continent = island.
+ */
+export type Continent = "africa" | "asia" | "europe" | "northAmerica" | "southAmerica" | "oceania";
+export type Quest =
+  | { kind: "continent"; continent: Continent; bonus: number }
+  | { kind: "landlocked"; bonus: number }
+  | { kind: "islandsOnly"; bonus: number }
+  | { kind: "twoContinents"; bonus: number }
+  | { kind: "equator"; bonus: number };
+
+const CONTINENT_CODES: Record<number, Continent> = {
+  1: "africa",
+  2: "asia",
+  3: "europe",
+  4: "northAmerica",
+  5: "southAmerica",
+  6: "oceania",
+};
+const CONTINENT_LIST = Object.values(CONTINENT_CODES);
+
+/** Quest bonuses only count when the ring itself scores at least this. */
+export const BONUS_MIN_SCORE = 20;
+
+function rng(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** The day's side quest (deterministic; independent of the puzzle's own random draws). */
+export function questFor(p: Puzzle): Quest {
+  const rand = rng(p.number * 7919 + 17);
+  rand();
+  const pool: Quest[] = [
+    { kind: "continent", continent: CONTINENT_LIST[Math.floor(rand() * CONTINENT_LIST.length)], bonus: 5 },
+    { kind: "landlocked", bonus: 5 },
+    { kind: "islandsOnly", bonus: 10 },
+    { kind: "twoContinents", bonus: 10 },
+  ];
+  // A ring needs to be big enough to reach the equator from a populated place.
+  if (p.radiusKm >= 25 && p.twist !== "packed-tiny") pool.push({ kind: "equator", bonus: 5 });
+  return pool[Math.floor(rand() * pool.length)];
+}
+
+/** What the land mask says about the area inside a ring. */
+export interface RingSurface {
+  center: number; // mask value at the ring centre
+  touchesSea: boolean;
+  touchesMainland: boolean;
+  touchesIsland: boolean;
+  continents: Set<Continent>;
+}
+
+/** Summarise the land-mask cells whose centres lie inside the ring. */
+export function surveyRing(block: Block, center: LngLat, radiusKm: number): RingSurface {
+  const { grid, rows, cols, values } = block;
+  const res = grid.res;
+  const s: RingSurface = {
+    center: 0,
+    touchesSea: false,
+    touchesMainland: false,
+    touchesIsland: false,
+    continents: new Set(),
+  };
+  let nearest = Infinity;
+  const latR = radiusKm / KM_PER_DEG;
+  for (let r = 0; r < rows; r++) {
+    const lat = grid.originLat - (block.row0 + r + 0.5) * res;
+    if (Math.abs(lat - center.lat) > latR + res) continue;
+    for (let c = 0; c < cols; c++) {
+      const lng = grid.originLng + (block.col0 + c + 0.5) * res;
+      const d = haversineKm(center, { lat, lng });
+      const v = values[r * cols + c];
+      if (d < nearest) {
+        nearest = d;
+        s.center = v;
+      }
+      if (d > radiusKm) continue;
+      if (v === 0) {
+        s.touchesSea = true;
+        continue;
+      }
+      if (v & 8) s.touchesIsland = true;
+      else s.touchesMainland = true;
+      const cont = CONTINENT_CODES[v & 7];
+      if (cont) s.continents.add(cont);
+    }
+  }
+  return s;
+}
+
+export function questDone(q: Quest, s: RingSurface, center: LngLat, radiusKm: number): boolean {
+  switch (q.kind) {
+    case "continent":
+      return s.center !== 0 && CONTINENT_CODES[s.center & 7] === q.continent;
+    case "landlocked":
+      return !s.touchesSea;
+    case "islandsOnly":
+      return s.touchesIsland && !s.touchesMainland;
+    case "twoContinents":
+      return s.continents.size >= 2;
+    case "equator": {
+      const latR = radiusKm / KM_PER_DEG;
+      return center.lat - latR < 0 && center.lat + latR > 0;
+    }
+  }
+}
+
+/** Bonus actually earned: the quest must be done and the ring must score decently. */
+export function questBonus(q: Quest, done: boolean, score: number): number {
+  return done && score >= BONUS_MIN_SCORE ? q.bonus : 0;
+}

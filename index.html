@@ -28,6 +28,10 @@
       <div class="label" id="challenge-label">Today's ring</div>
       <div class="challenge-line" id="challenge-line">
       </div>
+      <details class="quest" id="quest">
+        <summary><span class="quest-star">★</span> <span data-i18n="sideQuest">Side quest</span> <span class="quest-bonus" id="quest-bonus"></span></summary>
+        <p class="quest-text" id="quest-text"></p>
+      </details>
     </section>
 
     <div class="crosshair" id="crosshair" aria-hidden="true"></div>
@@ -77,6 +81,7 @@
         </div>
         <p class="gauge-caption" id="gauge-caption"></p>
         <p class="verdict" id="result-verdict"></p>
+        <p class="quest-result" id="quest-result" hidden></p>
         <p class="answer-line" id="answer-line" hidden></p>
         <div class="actions">
           <button class="primary" id="share-btn" data-i18n="shareResult">Share result</button>

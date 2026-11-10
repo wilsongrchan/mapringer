@@ -25,6 +25,18 @@ python3 -m venv .venv && .venv/bin/pip install rasterio numpy
 
 `population_10x.tif` (~10 km cells, summed) is used for rings of 100 km or more.
 
+Side quests use a land / island / continent mask built from [Natural Earth](https://www.naturalearthdata.com/) (public domain):
+
+```sh
+mkdir -p data/raw/ne && cd data/raw/ne
+for f in ne_10m_land ne_10m_minor_islands ne_50m_admin_0_countries; do
+  curl -LO https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/$f.geojson
+done
+cd ../../..
+.venv/bin/pip install scipy
+.venv/bin/python scripts/build_landmask.py data/raw/ne public/data/land.tif
+```
+
 In dev, test mode is on by default: unlimited attempts, endless random puzzles (**New puzzle**), nothing saved. Use `?unlimited=0` for the real one-try-per-day rules and `?day=N` to play puzzle #N.
 
 In production, host both `.tif` files on storage that supports range requests and CORS (e.g. Cloudflare R2), then build with `VITE_POPULATION_BASE_URL=https://…/` (the folder holding them).

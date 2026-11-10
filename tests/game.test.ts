@@ -203,3 +203,78 @@ describe.skipIf(!existsSync(DATA))("closest answer search", async () => {
     }, 60_000);
   }
 });
+
+const LAND = "public/data/land.tif";
+
+describe.skipIf(!existsSync(LAND))("side quests on the real land mask", async () => {
+  const { questFor, surveyRing, questDone, questBonus } = await import("../src/quests");
+  const landTiff = existsSync(LAND) ? await fromFile(LAND) : null;
+
+  async function readLand(center: LngLat, r: number) {
+    const image = await landTiff!.getImage();
+    const [originLng, originLat] = image.getOrigin();
+    const grid = { originLng, originLat, res: image.getResolution()[0], width: image.getWidth(), height: image.getHeight() };
+    const segs = circleWindows(grid, center, r);
+    const { row0, rows } = segs[0].window;
+    const cols = segs.reduce((n, s) => n + s.window.cols, 0);
+    const values = new Float32Array(rows * cols);
+    let off = 0;
+    for (const s of segs) {
+      const w = s.window;
+      const d = (await image.readRasters({ window: [w.col0, w.row0, w.col0 + w.cols, w.row0 + w.rows], samples: [0], interleave: true })) as unknown as ArrayLike<number>;
+      for (let rr = 0; rr < rows; rr++) for (let c = 0; c < w.cols; c++) values[rr * cols + off + c] = d[rr * w.cols + c];
+      off += w.cols;
+    }
+    return { grid, row0, col0: segs[0].logicalCol0, rows, cols, values };
+  }
+
+  const check = async (center: LngLat, r: number) => {
+    const s = surveyRing(await readLand(center, r), center, r);
+    return (q: Parameters<typeof questDone>[0]) => questDone(q, s, center, r);
+  };
+
+  it("Paris: in Europe, landlocked, not islands", async () => {
+    const done = await check({ lat: 48.85, lng: 2.35 }, 10);
+    expect(done({ kind: "continent", continent: "europe", bonus: 5 })).toBe(true);
+    expect(done({ kind: "continent", continent: "asia", bonus: 5 })).toBe(false);
+    expect(done({ kind: "landlocked", bonus: 5 })).toBe(true);
+    expect(done({ kind: "islandsOnly", bonus: 10 })).toBe(false);
+  });
+
+  it("London: only islands (Great Britain), no sea within 10 km", async () => {
+    const done = await check({ lat: 51.5, lng: -0.12 }, 10);
+    expect(done({ kind: "islandsOnly", bonus: 10 })).toBe(true);
+    expect(done({ kind: "landlocked", bonus: 5 })).toBe(true);
+  });
+
+  it("Hong Kong: island and mainland, touches the sea", async () => {
+    const done = await check({ lat: 22.3, lng: 114.17 }, 15);
+    expect(done({ kind: "islandsOnly", bonus: 10 })).toBe(false);
+    expect(done({ kind: "landlocked", bonus: 5 })).toBe(false);
+  });
+
+  it("Istanbul: two continents in a 5 km ring", async () => {
+    const done = await check({ lat: 41.03, lng: 29.01 }, 5);
+    expect(done({ kind: "twoContinents", bonus: 10 })).toBe(true);
+  });
+
+  it("Quito: crosses the equator with a 30 km ring", async () => {
+    const done = await check({ lat: -0.18, lng: -78.47 }, 30);
+    expect(done({ kind: "equator", bonus: 5 })).toBe(true);
+    expect(done({ kind: "continent", continent: "southAmerica", bonus: 5 })).toBe(true);
+  });
+
+  it("open ocean centre counts as no continent", async () => {
+    const done = await check({ lat: -20, lng: -140 }, 50);
+    expect(done({ kind: "continent", continent: "oceania", bonus: 5 })).toBe(false);
+  });
+
+  it("picks every quest kind over time, and only pays out with a decent score", () => {
+    const kinds = new Set(Array.from({ length: 300 }, (_, i) => questFor(puzzleFor(i + 1)).kind));
+    expect([...kinds].sort()).toEqual(["continent", "equator", "islandsOnly", "landlocked", "twoContinents"]);
+    const q = { kind: "landlocked" as const, bonus: 5 };
+    expect(questBonus(q, true, 60)).toBe(5);
+    expect(questBonus(q, true, 10)).toBe(0);
+    expect(questBonus(q, false, 90)).toBe(0);
+  });
+});

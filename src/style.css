@@ -872,3 +872,60 @@ dialog {
 .result.dragging {
   transition: none;
 }
+
+/* ---- side quest (collapsed by default on the challenge card) ---- */
+.quest {
+  margin-top: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.quest summary {
+  cursor: pointer;
+  list-style: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--border);
+}
+
+.quest summary::-webkit-details-marker {
+  display: none;
+}
+
+.quest summary::after {
+  content: "▸";
+  font-size: 11px;
+}
+
+.quest[open] summary::after {
+  content: "▾";
+}
+
+.quest-star {
+  color: #f6c343;
+}
+
+.quest-bonus {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.quest-text {
+  margin: 6px 0 0;
+  color: var(--fg);
+  white-space: normal;
+}
+
+.quest-result {
+  margin: -6px 0 10px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.quest-result.done {
+  color: var(--fg);
+  font-weight: 600;
+}

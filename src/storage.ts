@@ -8,7 +8,9 @@ export interface Result {
   accuracy: number; // plain closeness (min/max ratio)
   score: number; // player-facing log score (0–100)
   difficulty: Difficulty;
-  points: number; // score × difficulty multiplier
+  points: number; // score × difficulty multiplier + side-quest bonus
+  questDone?: boolean; // side quest condition met
+  bonus?: number; // side-quest points actually earned
 }
 
 const key = (n: number) => `mapringer:result:${n}`;
