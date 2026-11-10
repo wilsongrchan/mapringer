@@ -4,7 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 // hand MapLibre the URL, otherwise dep pre-bundling breaks the worker path.
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "./style.css";
-import { applyStaticText, LANG, switchLanguage, t } from "./i18n";
+import { applyStaticText, LANG, people, switchLanguage, t } from "./i18n";
 import { findClosestAnswer, MATCH_ACCURACY, type AnswerResult } from "./answer";
 import { applyMapStyle, applyRevealStyle, DIFFICULTIES, DIFFICULTY_ORDER, type Difficulty } from "./difficulty";
 import { circleRing, type LngLat } from "./geo";
@@ -84,7 +84,7 @@ function renderPuzzle() {
           ? t("practiceRing")
           : t("todaysRing");
   $("challenge-line").innerHTML = t("challengeLine", {
-    target: fmt(puzzle.target),
+    target: people(puzzle.target),
     radius: fmt(puzzle.radiusKm),
     article: article(puzzle.radiusKm),
   });
@@ -470,9 +470,9 @@ function showResult(r: Result, animate: boolean) {
   revealMap(r);
   setCollapsed(false, false);
   $("crosshair").classList.add("hidden");
-  $("result-target").textContent = fmt(puzzle.target);
+  $("result-target").textContent = people(puzzle.target);
   // long numbers (e.g. 1,310,000,000) get a smaller size so the two columns fit
-  const longest = Math.max(fmt(r.population).length, fmt(puzzle.target).length);
+  const longest = Math.max(people(r.population).length, people(puzzle.target).length);
   for (const id of ["result-pop", "result-target"]) {
     $(id).classList.toggle("long", longest > 9);
     $(id).classList.toggle("very-long", longest > 11);
@@ -486,7 +486,7 @@ function showResult(r: Result, animate: boolean) {
   $("result-bar").textContent = emojiBar(r.score);
   $("result-acc").textContent = `${r.score.toFixed(1)}`;
   $("result-summary").innerHTML = t("summary", {
-    pop: fmt(r.population),
+    pop: people(r.population),
     bar: emojiBar(r.score),
     score: (plain ? r.score : r.points).toFixed(1),
     unit: plain ? "" : t("ptsUnit"),
@@ -528,13 +528,13 @@ function showResult(r: Result, animate: boolean) {
 
 function countUp(el: HTMLElement, value: number, ms: number) {
   if (ms <= 0) {
-    el.textContent = fmt(value);
+    el.textContent = people(value);
     return;
   }
   const start = performance.now();
   const step = (now: number) => {
     const t = Math.min(1, (now - start) / ms);
-    el.textContent = fmt(value * (1 - (1 - t) ** 3));
+    el.textContent = people(value * (1 - (1 - t) ** 3));
     if (t < 1) requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
@@ -570,8 +570,8 @@ function showAnswer(r: Result, res: AnswerResult, animate: boolean) {
   setAnswerLine(
     "found",
     res.answer
-      ? t("closest", { pop: fmt(a.population), where }) + `<span class="place" id="answer-place"></span>`
-      : t("noHit", { km: fmt(res.searchedKm), pop: fmt(a.population), acc: a.accuracy.toFixed(1), where }) +
+      ? t("closest", { pop: people(a.population), where }) + `<span class="place" id="answer-place"></span>`
+      : t("noHit", { km: fmt(res.searchedKm), pop: people(a.population), acc: a.accuracy.toFixed(1), where }) +
           `<span class="place" id="answer-place"></span>`,
   );
   showPlace($("answer-place"), a.center, attempt, t("centredNear"));
@@ -651,6 +651,7 @@ $("share-btn").addEventListener("click", async () => {
     (v) => t("shareTitle", v),
     DIFFICULTIES[locked.difficulty].label,
     `${t("ptsUnit")}${locked.bonus ? " ★" : ""}`,
+    people,
   );
   try {
     if (navigator.share && matchMedia("(pointer: coarse)").matches) {

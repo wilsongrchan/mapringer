@@ -149,11 +149,12 @@ export function shareText(
   title: (v: { n: number; radius: string; level: string }) => string,
   difficultyLabel: string,
   ptsUnit: string,
+  people: (n: number) => string = fmt,
 ): string {
   const level = r.difficulty === "standard" ? "" : ` · ${difficultyLabel}`;
   return [
     title({ n: p.number, radius: fmt(p.radiusKm), level }),
-    `🎯 ${fmt(p.target)} → ${fmt(r.population)}`,
+    `🎯 ${people(p.target)} → ${people(r.population)}`,
     `${emojiBar(r.score)} ${r.points.toFixed(1)} ${ptsUnit}`,
     url,
   ].join("\n");

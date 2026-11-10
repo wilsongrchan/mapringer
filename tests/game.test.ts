@@ -28,6 +28,28 @@ describe("geometry", () => {
   });
 });
 
+describe("people counts", async () => {
+  const { formatPeople } = await import("../src/numbers");
+  it("uses 萬 and 億 in Chinese", () => {
+    expect(formatPeople(4_000, "zh")).toBe("4,000");
+    expect(formatPeople(9_999, "zh")).toBe("9,999");
+    expect(formatPeople(10_000, "zh")).toBe("1萬");
+    expect(formatPeople(65_000, "zh")).toBe("6萬5000");
+    expect(formatPeople(51_000, "zh")).toBe("5萬1000");
+    expect(formatPeople(17_000_000, "zh")).toBe("1700萬");
+    expect(formatPeople(6_235_539, "zh")).toBe("623萬5539");
+    expect(formatPeople(1_300_000_000, "zh")).toBe("13億");
+    expect(formatPeople(938_000_000, "zh")).toBe("9億3800萬");
+    expect(formatPeople(100_000_001, "zh")).toBe("1億零1");
+    expect(formatPeople(60_050, "zh")).toBe("6萬零50");
+    expect(formatPeople(105_000_000, "zh")).toBe("1億零500萬");
+    expect(formatPeople(1_000_500_000, "zh")).toBe("10億零50萬");
+  });
+  it("uses commas in English", () => {
+    expect(formatPeople(17_000_000, "en")).toBe("17,000,000");
+  });
+});
+
 describe("puzzles", () => {
   it("numbers days from launch", () => {
     expect(puzzleNumber(new Date(2026, 10, 9, 8))).toBe(1);
