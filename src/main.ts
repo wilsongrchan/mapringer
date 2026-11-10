@@ -814,10 +814,9 @@ function showResult(r: Result, animate: boolean) {
     $(id).classList.toggle("very-long", longest > 11);
   }
   const max = STAGES[r.stage].max;
-  // "🎯 96.4" (the level and the closeness score) and "80 / 80 pts"
+  // "🎯  80 / 80 pts": the level and the points (the 0–100 closeness score
+  // behind the level isn't shown; the caption says how far off the ring was)
   $("result-bar").textContent = r.emoji;
-  $("result-acc").textContent = r.score.toFixed(1);
-  $("result-acc").classList.remove("final");
   $("result-points").innerHTML = t("points", { points: fmtPoints(r.points), max });
   $("result-summary").innerHTML = t("summary", { pop: fmt(r.population), emoji: r.emoji, points: fmtPoints(r.points), max });
   // the quest: complete, or not done (so this ring was pass / fail)
