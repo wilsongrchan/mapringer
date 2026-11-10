@@ -1032,7 +1032,8 @@ const helpDialog = $<HTMLDialogElement>("help-dialog");
 $("help-btn").addEventListener("click", () => helpDialog.showModal());
 
 /**
- * How-to-play demo: a 7 s clip recorded from the real game (spin the globe,
+ * How-to-play demo: a 7 s clip recorded from the real game (day 1, ring 1 on the
+ * satellite map: spin the globe,
  * zoom into Hong Kong, the ring turns green at 5.3 s). The lock button, the
  * result chip and the step highlights follow the video's own clock.
  */

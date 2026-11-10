@@ -771,11 +771,23 @@ dialog {
 }
 
 /* overlay phases follow the video's clock (main.ts sets data-phase) */
+/* a small copy of the game's hollow, glowing lock ring, bottom right */
 .demo-btn {
-  background: var(--accent);
-  color: var(--accent-fg);
-  font-weight: 600;
-  transition: transform 0.15s, opacity 0.2s;
+  left: auto;
+  right: 0;
+  width: 54px;
+  height: 54px;
+  padding: 0;
+  display: grid;
+  place-items: center;
+  border: 6px solid var(--accent);
+  border-radius: 50%;
+  color: var(--accent);
+  text-shadow: 0 0 2px #fff, 0 0 4px #fff, 0 0 7px rgba(255, 255, 255, 0.9);
+  font-size: 9.5px;
+  font-weight: 800;
+  box-shadow: 0 0 10px rgba(228, 87, 46, 0.55);
+  transition: transform 0.15s, opacity 0.2s, box-shadow 0.15s;
 }
 
 .demo-result {
@@ -788,7 +800,8 @@ dialog {
 }
 
 .demo[data-phase="lock"] .demo-btn {
-  transform: scale(0.9);
+  transform: scale(0.88);
+  box-shadow: 0 0 18px 4px rgba(228, 87, 46, 0.85);
 }
 
 .demo[data-phase="result"] .demo-btn,
