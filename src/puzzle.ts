@@ -2,15 +2,28 @@
 export const LAUNCH_DATE = { year: 2026, month: 11, day: 9 };
 
 export interface Puzzle {
+  /** The day (1 = launch day); each day has three rings. */
   number: number;
+  /** Which of the day's rings: 0 easy, 1 medium, 2 hard. */
+  stage: Stage;
   radiusKm: number;
   target: number;
   /** Set on occasional "twist" puzzles that flip the usual size/crowd pairing. */
   twist?: "empty-giant" | "packed-tiny";
 }
 
-/** About 1 in 8 puzzles is a twist. */
-const TWIST_CHANCE = 0.125;
+/**
+ * Each day is three rings, easy to hard. Each has its own map and is worth
+ * more points; rings 2 and 3 come with a side quest (see quests.ts).
+ */
+export type Stage = 0 | 1 | 2;
+export const STAGES = [
+  { map: "easy", max: 80 },
+  { map: "standard", max: 100 },
+  { map: "hard", max: 150 },
+] as const;
+export const DAY_MAX = STAGES.reduce((n, s) => n + s.max, 0); // 330
+
 /**
  * Densest real rings in the GHSL data (Surat for 3 km, Dhaka for 5 km).
  * Packed-tiny targets are 25–60% of these so they stay reachable.
@@ -24,18 +37,15 @@ function twistPuzzle(number: number, rand: () => number): Puzzle {
   if (rand() < 0.5) {
     // A huge ring with hardly anyone in it: remote islands, deserts, the far north.
     const radiusKm = [500, 750, 1000][Math.floor(rand() * 3)];
-    return { number, radiusKm, target: niceRound(logUniform(rand, 500, 20_000)), twist: "empty-giant" };
+    return { number, stage: 2, radiusKm, target: niceRound(logUniform(rand, 500, 20_000)), twist: "empty-giant" };
   }
   // A tiny ring packed with people: the densest city centres on Earth.
   const radiusKm = rand() < 0.5 ? 3 : 5;
   const target = niceRound(TINY_RING_MAX[radiusKm] * (0.25 + rand() * 0.35));
-  return { number, radiusKm, target, twist: "packed-tiny" };
+  return { number, stage: 2, radiusKm, target, twist: "packed-tiny" };
 }
 
 const RADII_KM = [3, 5, 8, 10, 15, 20, 25, 30, 40, 50];
-/** Occasional big rings, counted on the coarse 10 km grid. */
-const BIG_RADII_KM = [100, 200, 300, 500, 750, 1000];
-const BIG_RING_CHANCE = 0.2;
 // Average density inside the ring (people / km²) is drawn log-uniformly between
 // these. The max falls for bigger rings, fitted to the densest real rings in the
 // GHSL data (100 km: ~2,240/km², 300 km: ~1,140, 1000 km: ~420, all around the
@@ -71,20 +81,44 @@ export function niceRound(n: number): number {
   return Math.round(n / mag) * mag;
 }
 
-export function puzzleFor(number: number): Puzzle {
-  const rand = mulberry32(number * 2654435761);
-  rand(); // discard first value: it correlates with nearby seeds
-  if (rand() < TWIST_CHANCE) return twistPuzzle(number, rand);
-  const radii = rand() < BIG_RING_CHANCE ? BIG_RADII_KM : RADII_KM;
-  const radiusKm = radii[Math.floor(rand() * radii.length)];
-  const maxD = maxDensity(radiusKm);
-  const density = Math.exp(Math.log(MIN_DENSITY) + rand() * (Math.log(maxD) - Math.log(MIN_DENSITY)));
-  const target = niceRound(Math.PI * radiusKm ** 2 * density);
-  return { number, radiusKm, target };
+/** A ring of the given radius whose average density is drawn log-uniformly in [lo, hi] people/km². */
+function ringOf(number: number, stage: Stage, radiusKm: number, rand: () => number, lo = MIN_DENSITY, hi = maxDensity(radiusKm)): Puzzle {
+  const density = logUniform(rand, lo, Math.min(hi, maxDensity(radiusKm)));
+  return { number, stage, radiusKm, target: niceRound(Math.PI * radiusKm ** 2 * density) };
 }
 
-export function todaysPuzzle(date: Date = new Date()): Puzzle {
-  return puzzleFor(puzzleNumber(date));
+/**
+ * The three rings get only a little harder (the map and the side quest do most
+ * of the work): ring 1 is an everyday city-scale ring with a typical crowd,
+ * ring 2 a slightly wider mix, ring 3 the full range with the occasional big
+ * ring or twist.
+ */
+const EASY_RADII_KM = [10, 15, 20, 25, 30];
+const MEDIUM_RADII_KM = [5, 8, 10, 15, 20, 25, 30, 40, 50];
+const HARD_BIG_RADII_KM = [100, 200, 300];
+const HARD_TWIST_CHANCE = 0.1;
+const HARD_BIG_CHANCE = 0.15;
+const pick = <T>(rand: () => number, xs: readonly T[]) => xs[Math.floor(rand() * xs.length)];
+
+/** One of the day's three rings. Each ring has its own seed, so they're independent. */
+export function ringFor(number: number, stage: Stage): Puzzle {
+  const rand = mulberry32(number * 2654435761 + stage * 40503);
+  rand(); // discard first value: it correlates with nearby seeds
+  if (stage === 0) return ringOf(number, 0, pick(rand, EASY_RADII_KM), rand, 100, 3000);
+  if (stage === 1) return ringOf(number, 1, pick(rand, MEDIUM_RADII_KM), rand, 40, 4000);
+  const roll = rand();
+  if (roll < HARD_TWIST_CHANCE) return twistPuzzle(number, rand);
+  if (roll < HARD_TWIST_CHANCE + HARD_BIG_CHANCE) return ringOf(number, 2, pick(rand, HARD_BIG_RADII_KM), rand, 20);
+  return ringOf(number, 2, pick(rand, RADII_KM), rand);
+}
+
+/** The day's three rings, easy to hard. */
+export function dayRings(number: number): [Puzzle, Puzzle, Puzzle] {
+  return [ringFor(number, 0), ringFor(number, 1), ringFor(number, 2)];
+}
+
+export function todaysNumber(date: Date = new Date()): number {
+  return puzzleNumber(date);
 }
 
 /**
@@ -124,41 +158,54 @@ export function ratioForScore(s: number): number {
   return 10 ** (PERFECT_DECADES + SCORE_SCALE * (100 / s - 1) ** (1 / SCORE_SHAPE));
 }
 
-/** The five score bands shown as circles and on the gauge, best first. */
-export const SCORE_BANDS = [
-  { min: 80, color: "#e4572e" },
-  { min: 60, color: "#f08a5d" },
-  { min: 40, color: "#f6c343" },
-  { min: 20, color: "#fae29f" },
-  { min: 0, color: "#ffffff" },
+/**
+ * Every ring lands in one of four levels, from its 0–100 closeness score.
+ * Each level is worth a fixed share of the ring's max points. Tweak here.
+ */
+export type Level = "bullseye" | "good" | "meh" | "bad";
+export const LEVELS: { level: Level; min: number; share: number; emoji: string; color: string }[] = [
+  { level: "bullseye", min: 90, share: 1, emoji: "🎯", color: "#e4572e" },
+  { level: "good", min: 70, share: 0.75, emoji: "🟠", color: "#f08a5d" },
+  { level: "meh", min: 40, share: 0.4, emoji: "🟡", color: "#f6c343" },
+  { level: "bad", min: 0, share: 0, emoji: "⚪", color: "#ffffff" },
 ];
+/** Score bands for the gauge, best first (one per level). */
+export const SCORE_BANDS = LEVELS.map(({ min, color }) => ({ min, color }));
 
-export function emojiBar(acc: number): string {
-  const filled = Math.round(acc / 20);
-  // score bands, best to worst: 80+ and 60+ orange, 40+ and 20+ yellow, below 20 white
-  const colour = acc >= 60 ? "🟠" : acc >= 20 ? "🟡" : "⚪";
-  return colour.repeat(filled) + "⚪".repeat(5 - filled);
+/**
+ * Side quest not done: the ring turns pass / fail. Scoring at least this is a
+ * pass (🌙), worth this share of the ring's max; otherwise it's a fail (⚪, 0).
+ */
+export const PASS_SCORE = 60;
+export const PASS_SHARE = 0.5;
+export const PASS_EMOJI = "🌙";
+
+export function levelOf(score: number): (typeof LEVELS)[number] {
+  return LEVELS.find((l) => score >= l.min) ?? LEVELS[LEVELS.length - 1];
 }
+
+/** What a ring earns: its grade (a level, or pass / fail without the quest), emoji and points. */
+export function gradeRing(stage: Stage, score: number, hasQuest: boolean, questDone: boolean) {
+  const max = STAGES[stage].max;
+  if (hasQuest && !questDone) {
+    const pass = score >= PASS_SCORE;
+    return { grade: pass ? ("pass" as const) : ("fail" as const), emoji: pass ? PASS_EMOJI : "⚪", points: pass ? max * PASS_SHARE : 0, max };
+  }
+  const l = levelOf(score);
+  return { grade: l.level, emoji: l.emoji, points: max * l.share, max };
+}
+export type Grade = ReturnType<typeof gradeRing>["grade"];
 
 export const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 
-export function shareText(
-  p: Puzzle,
-  r: { population: number; score: number; points: number; difficulty: string },
-  url: string,
-  title: (v: { n: number; radius: string; level: string }) => string,
-  difficultyLabel: string,
-  ptsUnit: string,
-  people: (n: number) => string = fmt,
-): string {
-  const level = r.difficulty === "standard" ? "" : ` · ${difficultyLabel}`;
-  return [
-    title({ n: p.number, radius: fmt(p.radiusKm), level }),
-    `🎯 ${people(p.target)} → ${people(r.population)}`,
-    `${emojiBar(r.score)} ${r.points.toFixed(1)} ${ptsUnit}`,
-    url,
-  ].join("\n");
+/** The day's share text: "MapRinger #3 · 🎯🌙🟠 263/330" and the link. */
+export function shareText(day: number, rings: { emoji: string; points: number }[], url: string, title: (n: number) => string, unit: string): string {
+  const total = rings.reduce((n, r) => n + r.points, 0);
+  return [title(day), `${rings.map((r) => r.emoji).join("")} ${fmtPoints(total)}/${DAY_MAX} ${unit}`.trim(), url].join("\n");
 }
+
+/** Points are whole numbers except for odd halves (e.g. 37.5). */
+export const fmtPoints = (n: number) => (Number.isInteger(n) ? String(n) : n.toFixed(1));
 
 /** Milliseconds until the next local midnight. */
 export function msUntilNextPuzzle(now: Date = new Date()): number {

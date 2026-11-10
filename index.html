@@ -42,25 +42,22 @@
       <div class="label" id="challenge-label">Today's ring</div>
       <div class="challenge-line" id="challenge-line">
       </div>
-      <details class="quest" id="quest">
-        <summary><span class="quest-star">★</span> <span data-i18n="sideQuest">Side quest</span> <span class="quest-bonus" id="quest-bonus"></span></summary>
+      <div class="quest" id="quest">
+        <span class="quest-head"><span class="quest-star">★</span> <span data-i18n="sideQuest">Quest</span></span>
         <p class="quest-text" id="quest-text"></p>
-      </details>
+      </div>
     </section>
 
     <div class="crosshair" id="crosshair" aria-hidden="true"></div>
 
+    <!-- lock in: a glowing ring-shaped button, bottom right -->
+    <div class="lock-wrap" id="play-panel">
+      <button class="lock-ring" id="lock-btn" data-i18n-label="lockIn" aria-label="Lock in ring">
+        <span class="lock-ring-label" data-i18n="lockInShort">Lock in</span>
+      </button>
+    </div>
+
     <footer class="bottom">
-      <div class="card play" id="play-panel">
-        <div class="difficulty" id="difficulty" role="group" aria-label="Map difficulty">
-          <button data-d="easy" data-i18n="diffEasy">Easy</button>
-          <button data-d="standard" data-i18n="diffStandard">Standard</button>
-          <button data-d="hard" data-i18n="diffHard">Hard</button>
-        </div>
-        <p class="difficulty-info" id="difficulty-info"></p>
-        <p class="hint" id="play-hint" data-i18n="playHint">Pan and zoom the map to move the ring. You get one try per day.</p>
-        <button class="primary" id="lock-btn" data-i18n="lockIn">Lock in ring</button>
-      </div>
 
       <div class="card result" id="result-panel" hidden>
         <button class="result-toggle" id="result-toggle" aria-expanded="true" aria-controls="result-details">
@@ -96,8 +93,15 @@
           <div class="gauge-labels" id="gauge-labels"></div>
         </div>
         <p class="gauge-caption" id="gauge-caption"></p>
+        <p class="quest-result" id="quest-result" hidden></p>
+        <!-- the day's three rings and total, once all three are played -->
+        <div class="day-summary" id="day-summary" hidden>
+          <ol class="day-rows" id="day-rows"></ol>
+          <div class="day-total"><span data-i18n="dayTotal">Today</span> <strong id="day-total"></strong></div>
+        </div>
         <div class="actions">
-          <button class="primary" id="share-btn" data-i18n="shareResult">Share result</button>
+          <button class="primary" id="next-btn" data-i18n="nextRing" hidden>Next ring →</button>
+          <button class="primary" id="share-btn" data-i18n="shareResult" hidden>Share result</button>
           <!-- test mode only -->
           <button id="again-btn" data-i18n="tryAgain" hidden>Try again</button>
           <button id="new-btn" data-i18n="newPuzzle" hidden>New puzzle</button>
@@ -131,11 +135,11 @@
       </ol>
 
       <p class="small" data-i18n-html="helpMaps"></p>
-      <!-- the same spot (Hong Kong) on each map -->
+      <!-- the same spot (Hong Kong) on each ring's map -->
       <div class="map-shots">
-        <figure><img src="help/map-hard.jpg" alt="" width="240" height="240" loading="lazy" /><figcaption><span data-i18n="diffHard">Hard</span> ×1.2</figcaption></figure>
-        <figure><img src="help/map-standard.jpg" alt="" width="240" height="240" loading="lazy" /><figcaption><span data-i18n="diffStandard">Standard</span> ×1</figcaption></figure>
-        <figure><img src="help/map-easy.jpg" alt="" width="240" height="240" loading="lazy" /><figcaption><span data-i18n="diffEasy">Easy</span> ×0.8</figcaption></figure>
+        <figure><img src="help/map-easy.jpg" alt="" width="240" height="240" loading="lazy" /><figcaption>1 · <span data-i18n="diffEasy">Easy</span></figcaption></figure>
+        <figure><img src="help/map-standard.jpg" alt="" width="240" height="240" loading="lazy" /><figcaption>2 · <span data-i18n="diffStandard">Standard</span></figcaption></figure>
+        <figure><img src="help/map-hard.jpg" alt="" width="240" height="240" loading="lazy" /><figcaption>3 · <span data-i18n="diffHard">Hard</span></figcaption></figure>
       </div>
       <p class="small" data-i18n-html="helpScoring"></p>
 
@@ -151,17 +155,6 @@
       </a>
     </dialog>
 
-    <dialog id="confirm-dialog" class="card confirm">
-      <form method="dialog">
-        <h2 id="confirm-title"></h2>
-        <p class="small" id="confirm-body"></p>
-        <label class="dont-ask"><input type="checkbox" id="confirm-skip" /> <span data-i18n="dontAskAgain">Don't ask again</span></label>
-        <div class="dialog-actions">
-          <button value="cancel" data-i18n="cancel">Cancel</button>
-          <button class="primary" value="ok" data-i18n="confirmSwitch">Switch</button>
-        </div>
-      </form>
-    </dialog>
 
     <div class="toast" id="toast" role="status" hidden></div>
 

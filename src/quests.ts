@@ -1,31 +1,34 @@
 import { haversineKm, KM_PER_DEG, type Block, type LngLat } from "./geo";
 import type { Puzzle } from "./puzzle";
 import COUNTRIES from "./countries.json";
+import { CITIES } from "./cities";
 
 /** Countries a quest can ask for, in mask order (value i + 1). */
 export type Country = (typeof COUNTRIES)[number];
 export { COUNTRIES };
 
 /**
- * Side quests: an optional extra condition on the day's ring, worth a few
- * bonus points. Checked against the land mask (public/data/land.tif):
- *   0 = sea, 16 | continent = mainland, 16 | 8 | continent = island.
+ * Side quests: rings 2 and 3 each come with an extra condition. Done, the ring
+ * is graded on the four levels; not done, it's pass / fail for half the
+ * points (see gradeRing in puzzle.ts). Checked against the land mask
+ * (public/data/land.tif): 0 = sea, 16 | continent = mainland, 16 | 8 | continent = island.
  */
 export type Continent = "africa" | "asia" | "europe" | "northAmerica" | "southAmerica" | "oceania";
 export type Quest =
-  | { kind: "continent"; continent: Continent; bonus: number }
-  | { kind: "country"; country: string; bonus: number }
-  | { kind: "landlocked"; bonus: number }
-  | { kind: "islandsOnly"; bonus: number }
-  | { kind: "twoContinents"; bonus: number }
-  | { kind: "equator"; bonus: number }
-  | { kind: "west" | "east" | "northOfCancer" | "southOfCapricorn" | "tropics"; bonus: number };
+  | { kind: "continent"; continent: Continent }
+  | { kind: "country"; country: string }
+  | { kind: "nearCity"; city: string; km: number }
+  | { kind: "landlocked" }
+  | { kind: "islandsOnly" }
+  | { kind: "twoContinents" }
+  | { kind: "equator" }
+  | { kind: "west" | "east" | "northOfCancer" | "southOfCapricorn" | "tropics" };
+
+/** "Keep your ring's centre within this many km of <city>". */
+export const NEAR_CITY_KM = 200;
 
 /** Latitude of the tropics (Cancer north, Capricorn south). */
 export const TROPIC_LAT = 23.436;
-/** Quests added after launch only appear from this puzzle on, so earlier days keep theirs. */
-export const LINE_QUESTS_FROM = 2;
-export const COUNTRY_QUESTS_FROM = 3;
 
 const CONTINENT_CODES: Record<number, Continent> = {
   1: "africa",
@@ -37,8 +40,6 @@ const CONTINENT_CODES: Record<number, Continent> = {
 };
 const CONTINENT_LIST = Object.values(CONTINENT_CODES);
 
-/** Quest bonuses only count when the ring itself scores at least this. */
-export const BONUS_MIN_SCORE = 20;
 
 function rng(seed: number) {
   let a = seed >>> 0;
@@ -51,30 +52,42 @@ function rng(seed: number) {
   };
 }
 
-/** The day's side quest (deterministic; independent of the puzzle's own random draws). */
-export function questFor(p: Puzzle): Quest {
-  const rand = rng(p.number * 7919 + 17);
+/**
+ * The ring's side quest: none for ring 1, an easy one for ring 2, a harder one
+ * for ring 3 (picked to suit the ring, so it's always possible). Deterministic,
+ * and independent of the ring's own random draws.
+ */
+export function questFor(p: Puzzle): Quest | null {
+  if (p.stage === 0) return null;
+  const rand = rng(p.number * 7919 + p.stage * 104729 + 17);
   rand();
+  const pick = <T>(xs: T[]) => xs[Math.floor(rand() * xs.length)];
+  const continent = pick(CONTINENT_LIST);
+  const country = pick(COUNTRIES).id;
+  const city = (dense: boolean) => pick(CITIES.filter((c) => !dense || c.dense)).id;
+
+  if (p.stage === 1) {
+    return pick<Quest>([
+      { kind: "landlocked" },
+      { kind: "continent", continent },
+      { kind: "west" },
+      { kind: "east" },
+      { kind: "northOfCancer" },
+      { kind: "tropics" },
+    ]);
+  }
+  if (p.twist === "packed-tiny") return { kind: "nearCity", city: city(true), km: NEAR_CITY_KM };
+  if (p.twist === "empty-giant") return pick<Quest>([{ kind: "islandsOnly" }, { kind: "southOfCapricorn" }, { kind: "equator" }]);
   const pool: Quest[] = [
-    { kind: "continent", continent: CONTINENT_LIST[Math.floor(rand() * CONTINENT_LIST.length)], bonus: 5 },
-    { kind: "landlocked", bonus: 5 },
-    { kind: "islandsOnly", bonus: 10 },
-    { kind: "twoContinents", bonus: 10 },
+    { kind: "nearCity", city: city(false), km: NEAR_CITY_KM },
+    { kind: "country", country },
+    { kind: "twoContinents" },
+    { kind: "southOfCapricorn" },
   ];
-  // A ring needs to be big enough to reach the equator from a populated place.
-  if (p.radiusKm >= 25 && p.twist !== "packed-tiny") pool.push({ kind: "equator", bonus: 5 });
-  // whole-ring-on-one-side-of-a-line quests (always possible for a populated ring)
-  if (p.number >= LINE_QUESTS_FROM)
-    pool.push(
-      { kind: "west", bonus: 5 },
-      { kind: "east", bonus: 5 },
-      { kind: "northOfCancer", bonus: 5 },
-      { kind: "southOfCapricorn", bonus: 10 },
-      { kind: "tropics", bonus: 5 },
-    );
-  if (p.number >= COUNTRY_QUESTS_FROM)
-    pool.push({ kind: "country", country: COUNTRIES[Math.floor(rand() * COUNTRIES.length)].id, bonus: 10 });
-  return pool[Math.floor(rand() * pool.length)];
+  // only small rings can sit on islands alone; the equator needs some reach from a city
+  if (p.radiusKm <= 50) pool.push({ kind: "islandsOnly" });
+  if (p.radiusKm >= 25) pool.push({ kind: "equator" });
+  return pick(pool);
 }
 
 /** What the land mask says about the area inside a ring. */
@@ -158,6 +171,10 @@ export function countryAt(block: Block, center: LngLat): string | null {
 /** `country` is the ring's centre country (countryAt), needed only for country quests. */
 export function questDone(q: Quest, s: RingSurface, center: LngLat, radiusKm: number, country: string | null = null): boolean {
   switch (q.kind) {
+    case "nearCity": {
+      const c = CITIES.find((c) => c.id === q.city);
+      return !!c && haversineKm(center, c) <= q.km;
+    }
     case "country":
       return country === q.country;
     case "continent":
@@ -192,7 +209,3 @@ export function questDone(q: Quest, s: RingSurface, center: LngLat, radiusKm: nu
   }
 }
 
-/** Bonus actually earned: the quest must be done and the ring must score decently. */
-export function questBonus(q: Quest, done: boolean, score: number): number {
-  return done && score >= BONUS_MIN_SCORE ? q.bonus : 0;
-}

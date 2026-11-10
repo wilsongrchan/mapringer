@@ -6,23 +6,30 @@ import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&ur
 import "./style.css";
 import { applyStaticText, LANG, people, switchLanguage, t } from "./i18n";
 import { findClosestAnswer, MATCH_ACCURACY, type AnswerResult } from "./answer";
-import {
-  applyMapStyle,
-  applyRevealStyle,
-  DIFFICULTIES,
-  DIFFICULTY_ORDER,
-  GLOBE,
-  loadPuzzleDifficulty,
-  prefetchStyles,
-  savePuzzleDifficulty,
-  type Difficulty,
-  type GameLayers,
-} from "./difficulty";
+import { applyMapStyle, applyRevealStyle, DIFFICULTIES, GLOBE, prefetchStyles, type Difficulty, type GameLayers } from "./difficulty";
 import { circleRing, type LngLat } from "./geo";
 import { coords, placeName } from "./places";
-import { BONUS_MIN_SCORE, COUNTRIES, countryAt, questBonus, questDone, questFor, surveyRing, TROPIC_LAT, type Quest } from "./quests";
+import { CITIES } from "./cities";
+import { COUNTRIES, countryAt, questDone, questFor, surveyRing, TROPIC_LAT, type Quest } from "./quests";
 import { populationInRing, preloadPopulation, readBlock, readCountryBlock, readLandBlock } from "./population";
-import { accuracy, emojiBar, ratioForScore, SCORE_BANDS, fmt, msUntilNextPuzzle, puzzleFor, score, shareText, todaysPuzzle, type Puzzle } from "./puzzle";
+import {
+  accuracy,
+  dayRings,
+  fmt,
+  fmtPoints,
+  gradeRing,
+  msUntilNextPuzzle,
+  PASS_SCORE,
+  PASS_SHARE,
+  ratioForScore,
+  SCORE_BANDS,
+  score,
+  shareText,
+  STAGES,
+  todaysNumber,
+  type Puzzle,
+  type Stage,
+} from "./puzzle";
 import { loadResult, saveResult, type Result } from "./storage";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -36,8 +43,19 @@ applyStaticText();
 const params = new URLSearchParams(location.search);
 const dayParam = Number(params.get("day"));
 const UNLIMITED = params.has("unlimited") ? params.get("unlimited") !== "0" : import.meta.env.DEV;
-let puzzle: Puzzle = dayParam > 0 ? puzzleFor(dayParam) : todaysPuzzle();
-let practice = false; // true once we've moved on to random puzzles
+// Each day is three rings, easy to hard, played one after another.
+let day = dayParam > 0 ? dayParam : todaysNumber();
+let rings = dayRings(day);
+let results: (Result | null)[] = ([0, 1, 2] as Stage[]).map((st) => (UNLIMITED ? null : loadResult(day, st)));
+/** The first ring not played yet (or the last ring once the day is done). */
+function nextStage(): Stage {
+  const i = results.findIndex((r) => !r);
+  return (i < 0 ? 2 : i) as Stage;
+}
+let stage: Stage = nextStage();
+let puzzle: Puzzle = rings[stage];
+let practice = false; // true once we've moved on to random days
+const dayDone = () => results.every(Boolean);
 
 const COLOR = { ring: "#e4572e", good: "#2a9d8f" };
 /** Side-quest hint colours, one per continent (so where two meet is easy to see). */
@@ -56,11 +74,10 @@ const CONTINENT_COLOR = [
 
 preloadPopulation();
 
-let locked: Result | null = UNLIMITED ? null : loadResult(puzzle.number);
+let locked: Result | null = results[stage];
 let attempt = 0; // bumps on every reset so stale async work is ignored
-// Always open on Hard, so nobody can study the labelled map and then switch to Hard.
-// (or the easier map already chosen for today's puzzle, so a reload can't reset it)
-let difficulty: Difficulty = locked?.difficulty ?? (UNLIMITED ? null : loadPuzzleDifficulty(puzzle.number)) ?? "hard";
+// each ring has its own map: ring 1 Easy, ring 2 Standard, ring 3 Hard
+let difficulty: Difficulty = STAGES[stage].map;
 
 /**
  * Start zoomed out far enough to see the whole globe between the panels. On a
@@ -78,7 +95,7 @@ const map = new maplibregl.Map({
   style: { version: 8, sources: {}, layers: [], projection: GLOBE },
   center: [10, 25],
   zoom: wholeGlobeZoom(),
-  attributionControl: { compact: true },
+  attributionControl: false, // added bottom-left below, clear of the lock-in button
   dragRotate: false,
   pitchWithRotate: false,
   // play map motion (the globe's spin glide, short camera moves) even with
@@ -87,6 +104,7 @@ const map = new maplibregl.Map({
 });
 // a longer, softer glide after a flick, so spinning the globe feels smooth
 map.dragPan.enable({ linearity: 0.22, deceleration: 1300, maxSpeed: 2400, easing: (t) => 1 - (1 - t) ** 3 });
+map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
 map.touchZoomRotate.disableRotation();
 map.keyboard.disableRotation();
 if (import.meta.env.DEV) (window as unknown as { __map: maplibregl.Map }).__map = map; // for debugging
@@ -104,9 +122,9 @@ function fitOneLine(el: HTMLElement, maxPx: number, minPx = 11) {
 }
 
 // the question line: 19px on wide screens, 16px on phones (shrinks further to fit)
-const fitChallenge = () => fitOneLine($("challenge-line"), matchMedia("(min-width: 800px)").matches ? 19 : 16);
+const fitChallenge = () => fitOneLine($("challenge-line"), matchMedia("(min-width: 800px)").matches ? 17 : 15);
 
-let quest: Quest = questFor(puzzle);
+let quest: Quest | null = questFor(puzzle);
 
 const QUEST_TEXT = {
   equator: "questEquator",
@@ -125,18 +143,21 @@ const countryName = (id: string) => {
   return c ? c[LANG] : id;
 };
 
+const cityOf = (id: string) => CITIES.find((c) => c.id === id);
+
 function questText(q: Quest): string {
   if (q.kind === "continent") return t("questContinent", { continent: t(q.continent) });
   if (q.kind === "country") return t("questCountry", { country: countryName(q.country) });
+  if (q.kind === "nearCity") return t("questNearCity", { city: cityOf(q.city)?.[LANG] ?? q.city, km: q.km });
   return t(QUEST_TEXT[q.kind]);
 }
 
 /**
- * Side-quest hints on the map: the equator, the target continent, every
- * continent (to see where they meet), or the islands. Shown on Easy and
- * Standard; Hard gets no hints until the ring is locked in.
+ * Quest hints on the map, on every ring's map (quests count, so they're
+ * shown): the equator / tropics / meridians, and continent or country
+ * borders as outlines. No shading of where the continents or islands are.
  */
-const showHints = () => difficulty !== "hard" || !!locked;
+const showHints = () => true;
 
 /** A labelled line all the way round the globe: a parallel (lat) or a meridian (lng). */
 function parallel(lat: number, name: string) {
@@ -150,7 +171,7 @@ function meridian(lng: number, name: string) {
 
 /** Map lines that go with the day's quest (equator, tropics, meridians). */
 function questLines() {
-  const lines = !showHints()
+  const lines = !showHints() || !quest
     ? []
     : quest.kind === "equator"
       ? [parallel(0, t("equator"))]
@@ -173,13 +194,14 @@ let continentsGeo: Promise<AreaFC> | null = null; // built from the land mask by
 
 /** Which continent / island shapes the current quest's hint shows. */
 function questAreaFilter(): ((f: AreaFC["features"][number]) => boolean) | null {
-  if (!showHints()) return null;
+  if (!showHints() || !quest) return null;
+  if (quest.kind === "nearCity") return () => true;
   if (quest.kind === "continent") {
     const c: string = quest.continent;
     return (f) => f.properties.continent === c;
   }
   if (quest.kind === "twoContinents" || quest.kind === "country") return () => true;
-  if (quest.kind === "islandsOnly") return (f) => f.properties.island;
+  // islands-only: no shading of where the big continents are
   return null;
 }
 
@@ -192,7 +214,16 @@ function refreshHints() {
     areasData = fc;
     (map.getSource("quest-areas") as maplibregl.GeoJSONSource | undefined)?.setData(fc);
   };
-  if (!keep) return apply(NO_AREAS);
+  if (!keep || !quest) return apply(NO_AREAS);
+  if (quest.kind === "nearCity") {
+    // the area the ring's centre must stay in: a circle around the city
+    const c = cityOf(quest.city);
+    if (!c) return apply(NO_AREAS);
+    return apply({
+      type: "FeatureCollection",
+      features: [{ type: "Feature", properties: { continent: "country", island: false }, geometry: { type: "Polygon", coordinates: [circleRing(c, quest.km)] } }],
+    });
+  }
   if (quest.kind === "country") {
     fetch(`${import.meta.env.BASE_URL}hints/countries/${quest.country}.geojson`)
       .then((r) => r.json() as Promise<AreaFC>)
@@ -215,22 +246,24 @@ function refreshHints() {
 
 function renderQuest() {
   refreshHints();
-  $("quest-bonus").textContent = `+${quest.bonus}`;
-  $("quest-text").textContent = `${questText(quest)} ${t("questRule", { min: BONUS_MIN_SCORE })}`;
+  $("quest").hidden = !quest; // ring 1 has no quest
+  if (quest)
+    $("quest-text").replaceChildren(
+      Object.assign(document.createElement("span"), { className: "quest-do", textContent: questText(quest) }),
+      Object.assign(document.createElement("span"), {
+        className: "quest-rule",
+        textContent: t("questRule", { pass: PASS_SCORE, half: fmtPoints(STAGES[stage].max * PASS_SHARE) }),
+      }),
+    );
 }
 
 function renderPuzzle() {
-  $("puzzle-num").textContent = practice ? t("practiceTag") : `#${puzzle.number}${UNLIMITED ? t("testTag") : ""}`;
-  $("challenge-label").textContent =
-    puzzle.twist === "empty-giant"
-      ? t("twistGiant")
-      : puzzle.twist === "packed-tiny"
-        ? t("twistTiny")
-        : practice
-          ? t("practiceRing")
-          : t("todaysRing");
-  // phones hide the plain "Today's ring" label but keep twist labels
-  $("challenge-label").classList.toggle("twist", puzzle.twist === "empty-giant" || puzzle.twist === "packed-tiny");
+  $("puzzle-num").textContent = practice ? t("practiceTag") : `#${day}${UNLIMITED ? t("testTag") : ""}`;
+  // "Ring 2 of 3 · Standard map · 100 pts", plus the twist if there is one
+  const ringLabel = t("ringLabel", { n: stage + 1, map: DIFFICULTIES[STAGES[stage].map].label, max: STAGES[stage].max });
+  const twist = puzzle.twist === "empty-giant" ? t("twistGiant") : puzzle.twist === "packed-tiny" ? t("twistTiny") : "";
+  $("challenge-label").textContent = twist ? `${ringLabel} · ${twist}` : ringLabel;
+  $("challenge-label").classList.add("twist"); // always shown: it says which ring this is
   $("challenge-line").innerHTML = t("challengeLine", {
     target: people(puzzle.target),
     radius: fmt(puzzle.radiusKm),
@@ -244,7 +277,6 @@ addEventListener("resize", fitChallenge);
 document.fonts?.ready.then(fitChallenge);
 
 if (UNLIMITED) {
-  $("play-hint").textContent = t("testHint");
   $("again-btn").hidden = false;
   $("new-btn").hidden = false;
   $("next-info").hidden = true;
@@ -327,7 +359,8 @@ const gameLayers: GameLayers = () => ({
       id: "quest-area-fill",
       type: "fill",
       source: "quest-areas",
-      paint: { "fill-color": CONTINENT_COLOR, "fill-opacity": 0.2 },
+      // outlines only: the borders a quest needs, not shaded areas
+      paint: { "fill-color": CONTINENT_COLOR, "fill-opacity": 0 },
     },
     {
       id: "quest-area-line",
@@ -399,75 +432,10 @@ map.on("resize", () => {
   if (!locked) drawOverlay();
 });
 
-// ---- difficulty ----
-// You start on Hard and can switch to an easier map at any point before
-// locking in (for fewer points), but never back to a harder one.
-function renderDifficulty() {
-  for (const btn of document.querySelectorAll<HTMLButtonElement>("#difficulty button")) {
-    const d = btn.dataset.d as Difficulty;
-    btn.setAttribute("aria-pressed", String(d === difficulty));
-    const harder = DIFFICULTY_ORDER.indexOf(d) > DIFFICULTY_ORDER.indexOf(difficulty);
-    btn.disabled = d !== difficulty && harder;
-  }
-  const info = DIFFICULTIES[difficulty];
-  // "Land, lakes and rivers only · ×1.2 points"
-  $("difficulty-info").textContent = t("diffInfo", { blurb: info.blurb, mult: info.multiplier, locked: "" });
-}
-
-const SKIP_CONFIRM_KEY = "mapringer:skip-easier-confirm";
-
-/** Switching to an easier map can't be undone for this ring, so ask first (unless told not to). */
-function confirmEasier(to: Difficulty): Promise<boolean> {
-  try {
-    if (localStorage.getItem(SKIP_CONFIRM_KEY)) return Promise.resolve(true);
-  } catch {
-    /* storage unavailable: just ask */
-  }
-  const dlg = $<HTMLDialogElement>("confirm-dialog");
-  const skip = $<HTMLInputElement>("confirm-skip");
-  skip.checked = false;
-  const target = DIFFICULTIES[to];
-  $("confirm-title").textContent = t("confirmEasierTitle", { to: target.label });
-  $("confirm-body").textContent = t("confirmEasierBody", { blurb: target.blurb, mult: target.multiplier, from: DIFFICULTIES[difficulty].label });
-  dlg.returnValue = "";
-  dlg.showModal();
-  return new Promise((resolve) =>
-    dlg.addEventListener(
-      "close",
-      () => {
-        const ok = dlg.returnValue === "ok";
-        // "don't ask again" only sticks when they actually switch
-        if (ok && skip.checked) {
-          try {
-            localStorage.setItem(SKIP_CONFIRM_KEY, "1");
-          } catch {
-            /* storage unavailable */
-          }
-        }
-        resolve(ok);
-      },
-      { once: true },
-    ),
-  );
-}
-
-$("difficulty").addEventListener("click", async (e) => {
-  const d = (e.target as HTMLElement).closest<HTMLButtonElement>("button")?.dataset.d as Difficulty | undefined;
-  if (!d || d === difficulty) return;
-  if (DIFFICULTY_ORDER.indexOf(d) > DIFFICULTY_ORDER.indexOf(difficulty)) return; // no going back up
-  if (!(await confirmEasier(d)) || locked) return;
-  difficulty = d;
-  if (!UNLIMITED) savePuzzleDifficulty(puzzle.number, d);
-  applyMapStyle(map, d, LANG, gameLayers);
-  renderDifficulty();
-  refreshHints();
-});
-
 map.on("movestart", (e) => {
   if (locked || !(e as { originalEvent?: Event }).originalEvent) return;
   document.body.classList.add("explored");
 });
-renderDifficulty();
 
 // ---- locking in ----
 const lockBtn = $<HTMLButtonElement>("lock-btn");
@@ -477,7 +445,9 @@ lockBtn.addEventListener("click", async () => {
   const center = { lng: c.lng, lat: c.lat };
   const myAttempt = attempt;
   lockBtn.disabled = true;
-  lockBtn.textContent = t("counting");
+  lockBtn.classList.add("counting");
+  lockBtn.setAttribute("aria-label", t("counting"));
+  buzz(25); // a little tap on phones that support it
   try {
     let seaShare: number | undefined;
     const [population, done] = await Promise.all([
@@ -486,39 +456,43 @@ lockBtn.addEventListener("click", async () => {
       Promise.all([
         readLandBlock(center, puzzle.radiusKm),
         // country quests only need the cells right around the centre
-        quest.kind === "country" ? readCountryBlock(center, 3).then((block) => countryAt(block, center)) : null,
+        quest?.kind === "country" ? readCountryBlock(center, 3).then((block) => countryAt(block, center)) : null,
       ])
         .then(([block, country]) => {
           const surface = surveyRing(block, center, puzzle.radiusKm);
           seaShare = surface.seaShare;
-          return questDone(quest, surface, center, puzzle.radiusKm, country);
+          return quest ? questDone(quest, surface, center, puzzle.radiusKm, country) : false;
         })
         .catch(() => false),
     ]);
     if (myAttempt !== attempt) return;
     const s = score(population, puzzle.target);
-    const bonus = questBonus(quest, done, s);
+    const g = gradeRing(stage, s, !!quest, done);
     const result: Result = {
-      puzzle: puzzle.number,
+      puzzle: day,
+      stage,
       ...center,
       population,
       accuracy: accuracy(population, puzzle.target),
       score: s,
-      difficulty,
-      questDone: done,
+      questDone: quest ? done : undefined,
+      grade: g.grade,
+      emoji: g.emoji,
+      points: g.points,
       seaShare,
-      bonus,
-      // the side-quest bonus is added first, so the map multiplier applies to it too
-      points: (s + bonus) * DIFFICULTIES[difficulty].multiplier,
     };
     if (!UNLIMITED) saveResult(result);
+    results[stage] = result;
     locked = result;
+    // a happy buzz for a bullseye, a short one otherwise
+    buzz(result.grade === "bullseye" ? [40, 70, 40, 70, 90] : result.points > 0 ? [30, 60, 30] : 60);
     showResult(result, true);
   } catch (e) {
     console.error(e);
     toast(t("loadFailed"));
     lockBtn.disabled = false;
-    lockBtn.textContent = t("lockIn");
+    lockBtn.classList.remove("counting");
+    lockBtn.setAttribute("aria-label", t("lockIn"));
   }
 });
 
@@ -529,11 +503,17 @@ lockBtn.addEventListener("click", async () => {
  * same result, so a reload doesn't change it.
  */
 function verdict(r: Result): string {
-  if (r.score < 40 && (r.seaShare ?? 0) >= 0.5) return t("verdictOcean");
-  const bad = r.population > puzzle.target ? "verdictBadMany" : "verdictBadFew";
-  const lines = t(r.score >= 75 ? "verdictGood" : r.score >= 40 ? "verdictMeh" : bad).split("|");
-  const seed = Math.abs(Math.round(r.lng * 1000) * 31 + Math.round(r.lat * 1000) * 7 + r.puzzle);
-  return lines[seed % lines.length];
+  const seed = Math.abs(Math.round(r.lng * 1000) * 31 + Math.round(r.lat * 1000) * 7 + r.puzzle + r.stage);
+  const pick = (key: Parameters<typeof t>[0]) => {
+    const lines = t(key).split("|");
+    return lines[seed % lines.length];
+  };
+  if (r.grade === "bullseye") return pick("verdictBullseye");
+  if (r.grade === "good") return pick("verdictGood");
+  if (r.grade === "pass") return pick("verdictPass");
+  if (r.grade === "meh") return pick("verdictMeh");
+  if ((r.seaShare ?? 0) >= 0.5) return t("verdictOcean");
+  return pick(r.population > puzzle.target ? "verdictBadMany" : "verdictBadFew");
 }
 
 let lastBounds: maplibregl.LngLatBounds | null = null;
@@ -620,6 +600,8 @@ const sidebar = () => wide.matches && document.body.classList.contains("showing-
 
 function setResultLayout(on: boolean) {
   document.body.classList.toggle("showing-result", on);
+  // the challenge card moves with the layout: place the results below its new spot
+  requestAnimationFrame(updateChallengeBottom);
   // shifting the map's centre waits for any reveal wipe, which needs a still map
   revealDone.then(applyLayoutPadding);
 }
@@ -634,6 +616,12 @@ wide.addEventListener("change", applyLayoutPadding);
 new ResizeObserver(([entry]) => {
   document.documentElement.style.setProperty("--bottom-h", `${Math.round(entry.borderBoxSize[0].blockSize)}px`);
 }).observe(document.querySelector("footer.bottom")!);
+// the challenge card grows with the quest; on wide screens the results column starts below it
+function updateChallengeBottom() {
+  document.documentElement.style.setProperty("--challenge-bottom", `${Math.round($("challenge").getBoundingClientRect().bottom)}px`);
+}
+new ResizeObserver(updateChallengeBottom).observe($("challenge"));
+addEventListener("resize", updateChallengeBottom);
 
 // fitBounds padding is on top of the layout padding above
 const padding = () =>
@@ -715,7 +703,7 @@ let revealDone: Promise<void> = Promise.resolve(); // camera moves wait for the 
 
 /** Lift the fog: full-colour map with roads and labels once the ring is locked in. */
 function revealMap(r: Result, animate: boolean) {
-  if (revealed || r.difficulty === "easy") return;
+  if (revealed || STAGES[r.stage].map === "easy") return;
   revealed = true;
   if (!animate) {
     applyRevealStyle(map, LANG, gameLayers);
@@ -801,35 +789,25 @@ function showResult(r: Result, animate: boolean) {
     $(id).classList.toggle("long", longest > 9);
     $(id).classList.toggle("very-long", longest > 11);
   }
-  r.score ??= score(r.population, puzzle.target); // results saved before scoring changed
-  r.difficulty ??= "standard";
-  r.points ??= r.score * DIFFICULTIES[r.difficulty].multiplier;
-  const mult = DIFFICULTIES[r.difficulty].multiplier;
-  const bonus = r.bonus ?? 0;
-  const plain = mult === 1 && bonus === 0; // points equal the score
-  $("result-bar").textContent = emojiBar(r.score);
-  // a star after the score when the side-quest bonus was earned
-  $("result-acc").textContent = `${r.score.toFixed(1)}${bonus ? " ⭐" : ""}`;
-  // the final number is orange: the score itself, or the total after multiplier / bonus
-  $("result-acc").classList.toggle("final", plain);
-  $("result-summary").innerHTML = t("summary", {
-    pop: fmt(r.population),
-    bar: emojiBar(r.score),
-    score: (plain ? r.score : r.points).toFixed(1),
-    unit: plain ? "" : t("ptsUnit"),
-  });
-  $("result-points").innerHTML = plain
-    ? ""
-    : t("points", {
-        parts: [bonus ? `+${bonus}★` : "", mult !== 1 ? `×${mult}` : ""].filter(Boolean).join(" "),
-        points: r.points.toFixed(1),
-      });
+  const max = STAGES[r.stage].max;
+  // "🎯 96.4" (the level and the closeness score) and "80 / 80 pts"
+  $("result-bar").textContent = r.emoji;
+  $("result-acc").textContent = r.score.toFixed(1);
+  $("result-acc").classList.remove("final");
+  $("result-points").innerHTML = t("points", { points: fmtPoints(r.points), max });
+  $("result-summary").innerHTML = t("summary", { pop: fmt(r.population), emoji: r.emoji, points: fmtPoints(r.points), max });
+  // the quest: complete, or not done (so this ring was pass / fail)
+  const qr = $("quest-result");
+  qr.hidden = r.questDone === undefined;
+  qr.classList.toggle("done", !!r.questDone);
+  qr.textContent = r.questDone ? t("questDoneLine") : t("questMissedLine", { pass: PASS_SCORE });
+  renderDayEnd();
   updateRing();
   setCenters([{ kind: "mine", at: center }]);
   showPlace($("result-place"), center, myAttempt);
   renderGauge(r, animate);
   countUp($("result-pop"), r.population, animate ? 1000 : 0);
-  startCountdown();
+  if (dayDone()) startCountdown();
 
   revealDone.then(() => {
     if (myAttempt === attempt) fitRings([{ center, radiusKm: puzzle.radiusKm * 1.3 }], animate ? 800 : 0);
@@ -931,7 +909,29 @@ function startCountdown() {
   countdownTimer = window.setInterval(tick, 1000);
 }
 
-// ---- test mode: retry / new puzzle ----
+// ---- the end of a ring: next ring, or the day's total ----
+/**
+ * After rings 1 and 2: a Next ring button. Once all three are played: the
+ * day's rings and total out of 330, the share button and the countdown.
+ */
+function renderDayEnd() {
+  const done = dayDone();
+  $("next-btn").hidden = stage === 2 || !results[stage];
+  $("share-btn").hidden = !done;
+  $("next-info").hidden = !done || UNLIMITED;
+  $("day-summary").hidden = !done;
+  if (!done) return;
+  const rows = results.map((r, i) =>
+    Object.assign(document.createElement("li"), {
+      innerHTML: `<span>${t("ringN", { n: i + 1 })}</span> <span>${r!.emoji}</span> <span><strong>${fmtPoints(r!.points)}</strong> / ${STAGES[i].max}</span>`,
+    }),
+  );
+  $("day-rows").replaceChildren(...rows);
+  const total = results.reduce((n, r) => n + (r?.points ?? 0), 0);
+  $("day-total").textContent = `${results.map((r) => r!.emoji).join("")} ${fmtPoints(total)} / ${STAGES.reduce((n, st) => n + st.max, 0)}`;
+}
+
+/** Back to placing a ring (the current stage's), on that ring's own map. */
 function resetPlay() {
   attempt++;
   locked = null;
@@ -942,44 +942,56 @@ function resetPlay() {
   lastBounds = null;
   $("crosshair").classList.remove("hidden");
   lockBtn.disabled = false;
-  lockBtn.textContent = t("lockIn");
+  lockBtn.classList.remove("counting");
+  lockBtn.setAttribute("aria-label", t("lockIn"));
   setData("answer", EMPTY);
   setAnswerLine("hide");
   setCenters([]);
-  // every new attempt starts back on Hard
   document.body.classList.remove("explored");
-  if (difficulty !== "hard" || revealed) {
-    difficulty = "hard";
+  const want = STAGES[stage].map;
+  if (difficulty !== want || revealed) {
+    difficulty = want;
     applyMapStyle(map, difficulty, LANG, gameLayers);
   }
   revealed = false;
   holdOverlay = false;
   $("reveal-snap").hidden = true;
-  renderDifficulty();
   refreshHints();
   updateRing();
 }
 
-$("again-btn").addEventListener("click", resetPlay);
-$("new-btn").addEventListener("click", () => {
-  practice = true;
-  puzzle = puzzleFor(1000 + Math.floor(Math.random() * 1e9));
+/** Start ring `st` of the current day: zoom back out to the whole globe and place a new ring. */
+function startRing(st: Stage) {
+  stage = st;
+  puzzle = rings[st];
   quest = questFor(puzzle);
   renderPuzzle();
   resetPlay();
+  map.easeTo({ zoom: wholeGlobeZoom(), duration: 900 });
+}
+
+$("next-btn").addEventListener("click", () => {
+  if (stage < 2 && results[stage]) startRing((stage + 1) as Stage);
 });
 
-// ---- sharing ----
+// test mode: retry this ring, or a brand-new random day
+$("again-btn").addEventListener("click", () => {
+  results[stage] = null;
+  resetPlay();
+});
+$("new-btn").addEventListener("click", () => {
+  practice = true;
+  day = 1000 + Math.floor(Math.random() * 1e9);
+  rings = dayRings(day);
+  results = [null, null, null];
+  startRing(0);
+});
+
+// ---- sharing: the whole day ("MapRinger #3 · 🎯🌙🟠 263/330") ----
 $("share-btn").addEventListener("click", async () => {
-  if (!locked) return;
-  const text = shareText(
-    puzzle,
-    locked,
-    location.origin + location.pathname,
-    (v) => t("shareTitle", v),
-    DIFFICULTIES[locked.difficulty].label,
-    `${t("ptsUnit")}${locked.bonus ? " ★" : ""}`,
-  );
+  const played = results.filter((r): r is Result => !!r);
+  if (!played.length) return;
+  const text = shareText(day, played, location.origin + location.pathname, (n) => t("shareTitle", { n }), t("ptsUnit"));
   try {
     if (navigator.share && matchMedia("(pointer: coarse)").matches) {
       await navigator.share({ text });
@@ -1029,6 +1041,18 @@ try {
   }
 } catch {
   /* storage unavailable */
+}
+
+/**
+ * Haptics where the browser allows it (Android Chrome and others; iPhones'
+ * Safari has no vibration API, so there it's just the glow).
+ */
+function buzz(pattern: number | number[]) {
+  try {
+    navigator.vibrate?.(pattern);
+  } catch {
+    /* not supported */
+  }
 }
 
 let toastTimer: number | undefined;

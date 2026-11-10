@@ -3,13 +3,12 @@ import { t, type Lang } from "./i18n";
 
 export type Difficulty = "easy" | "standard" | "hard";
 
-export const DIFFICULTIES: Record<Difficulty, { label: string; multiplier: number; blurb: string }> = {
-  easy: { label: t("diffEasy"), multiplier: 0.8, blurb: t("blurbEasy") },
-  standard: { label: t("diffStandard"), multiplier: 1, blurb: t("blurbStandard") },
-  hard: { label: t("diffHard"), multiplier: 1.2, blurb: t("blurbHard") },
+/** The map each of the day's rings is played on: ring 1 Easy, ring 2 Standard, ring 3 Hard. */
+export const DIFFICULTIES: Record<Difficulty, { label: string; blurb: string }> = {
+  easy: { label: t("diffEasy"), blurb: t("blurbEasy") },
+  standard: { label: t("diffStandard"), blurb: t("blurbStandard") },
+  hard: { label: t("diffHard"), blurb: t("blurbHard") },
 };
-
-export const DIFFICULTY_ORDER: Difficulty[] = ["easy", "standard", "hard"];
 
 const OFM = "https://tiles.openfreemap.org/styles";
 
@@ -163,27 +162,4 @@ export function applyMapStyle(map: maplibregl.Map, d: Difficulty, lang: Lang, ga
   const url = d === "easy" ? `${OFM}/liberty` : `${OFM}/positron`;
   const transform = d === "easy" ? satellite : d === "hard" ? blank : noRoads;
   return swapStyle(map, url, transform, lang, game, diff);
-}
-
-/**
- * The map chosen for a daily puzzle. You can only ever switch to an easier
- * map, so it's remembered per puzzle: reloading can't put you back on Hard
- * after scouting on Easy.
- */
-export function loadPuzzleDifficulty(puzzle: number): Difficulty | null {
-  try {
-    const d = localStorage.getItem(`mapringer:difficulty:${puzzle}`);
-    if (d === "easy" || d === "standard" || d === "hard") return d;
-  } catch {
-    /* storage unavailable */
-  }
-  return null;
-}
-
-export function savePuzzleDifficulty(puzzle: number, d: Difficulty): void {
-  try {
-    localStorage.setItem(`mapringer:difficulty:${puzzle}`, d);
-  } catch {
-    /* storage unavailable */
-  }
 }
