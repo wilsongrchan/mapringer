@@ -312,7 +312,7 @@ describe.skipIf(!existsSync(LAND))("side quests on the real land mask", async ()
   it("picks every quest kind over time, and only pays out with a decent score", () => {
     const kinds = new Set(Array.from({ length: 300 }, (_, i) => questFor(puzzleFor(i + 1)).kind));
     expect([...kinds].sort()).toEqual([
-      "continent", "east", "equator", "islandsOnly", "landlocked", "northOfCancer", "southOfCapricorn", "tropics", "twoContinents", "west",
+      "continent", "country", "east", "equator", "islandsOnly", "landlocked", "northOfCancer", "southOfCapricorn", "tropics", "twoContinents", "west",
     ]);
     // puzzle #1 was played before the line quests were added; it keeps its quest
     expect(questFor(puzzleFor(1))).toEqual({ kind: "continent", continent: "oceania", bonus: 5 });
@@ -320,5 +320,45 @@ describe.skipIf(!existsSync(LAND))("side quests on the real land mask", async ()
     expect(questBonus(q, true, 60)).toBe(5);
     expect(questBonus(q, true, 10)).toBe(0);
     expect(questBonus(q, false, 90)).toBe(0);
+  });
+});
+
+const COUNTRY_TIF = "public/data/countries.tif";
+
+describe.skipIf(!existsSync(COUNTRY_TIF))("country quests on the real country mask", async () => {
+  const { countryAt, questDone, questFor, COUNTRIES, COUNTRY_QUESTS_FROM } = await import("../src/quests");
+  const tiff = existsSync(COUNTRY_TIF) ? await fromFile(COUNTRY_TIF) : null;
+
+  async function countryOf(center: LngLat) {
+    const image = await tiff!.getImage();
+    const [originLng, originLat] = image.getOrigin();
+    const grid = { originLng, originLat, res: image.getResolution()[0], width: image.getWidth(), height: image.getHeight() };
+    const [seg] = circleWindows(grid, center, 3);
+    const w = seg.window;
+    const values = Float32Array.from((await image.readRasters({ window: [w.col0, w.row0, w.col0 + w.cols, w.row0 + w.rows], samples: [0], interleave: true })) as unknown as ArrayLike<number>);
+    return countryAt({ grid, row0: w.row0, col0: seg.logicalCol0, rows: w.rows, cols: w.cols, values }, center);
+  }
+
+  it("finds the country under the ring's centre", async () => {
+    expect(await countryOf({ lat: 48.85, lng: 2.35 })).toBe("FRA"); // Paris
+    expect(await countryOf({ lat: 50.85, lng: 4.35 })).toBe(null); // Brussels: Belgium isn't on the list
+    expect(await countryOf({ lat: 38.71, lng: -9.14 })).toBe(null); // Lisbon: Portugal isn't either
+    expect(await countryOf({ lat: 35.68, lng: 139.77 })).toBe("JPN"); // Tokyo, on the coast
+    expect(await countryOf({ lat: 0, lng: -30 })).toBe(null); // mid-Atlantic
+    // Natural Earth draws Hong Kong separately from China
+    expect(await countryOf({ lat: 22.32, lng: 114.17 })).toBe(null);
+    expect(await countryOf({ lat: 23.13, lng: 113.26 })).toBe("CHN"); // Guangzhou
+  });
+
+  it("country quests only from their start puzzle, and judge the centre's country", () => {
+    for (let n = 1; n < COUNTRY_QUESTS_FROM; n++) expect(questFor(puzzleFor(n)).kind).not.toBe("country");
+    const picks = Array.from({ length: 400 }, (_, i) => questFor(puzzleFor(COUNTRY_QUESTS_FROM + i))).filter((q) => q.kind === "country");
+    expect(picks.length).toBeGreaterThan(10);
+    for (const q of picks) expect(COUNTRIES.some((c) => c.id === (q as { country: string }).country)).toBe(true);
+    const none = { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, continents: new Set<never>() };
+    const q = { kind: "country" as const, country: "FRA", bonus: 10 };
+    expect(questDone(q, none, { lat: 48.85, lng: 2.35 }, 10, "FRA")).toBe(true);
+    expect(questDone(q, none, { lat: 48.85, lng: 2.35 }, 10, "DEU")).toBe(false);
+    expect(questDone(q, none, { lat: 48.85, lng: 2.35 }, 10, null)).toBe(false);
   });
 });

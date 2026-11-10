@@ -9,8 +9,8 @@ import { findClosestAnswer, MATCH_ACCURACY, type AnswerResult } from "./answer";
 import { applyMapStyle, applyRevealStyle, DIFFICULTIES, DIFFICULTY_ORDER, GLOBE, prefetchStyles, type Difficulty, type GameLayers } from "./difficulty";
 import { circleRing, type LngLat } from "./geo";
 import { coords, placeName } from "./places";
-import { BONUS_MIN_SCORE, questBonus, questDone, questFor, surveyRing, TROPIC_LAT, type Quest } from "./quests";
-import { populationInRing, preloadPopulation, readBlock, readLandBlock } from "./population";
+import { BONUS_MIN_SCORE, COUNTRIES, countryAt, questBonus, questDone, questFor, surveyRing, TROPIC_LAT, type Quest } from "./quests";
+import { populationInRing, preloadPopulation, readBlock, readCountryBlock, readLandBlock } from "./population";
 import { accuracy, emojiBar, ratioForScore, SCORE_BANDS, fmt, msUntilNextPuzzle, puzzleFor, score, shareText, todaysPuzzle, type Puzzle } from "./puzzle";
 import { loadResult, saveResult, type Result } from "./storage";
 
@@ -39,6 +39,7 @@ const CONTINENT_COLOR = [
   "northAmerica", "#8a5cc2",
   "southAmerica", "#2f9e44",
   "oceania", "#0f9e99",
+  "country", "#e07a00",
   "#888888",
 ] as unknown as maplibregl.ExpressionSpecification;
 
@@ -102,8 +103,15 @@ const QUEST_TEXT = {
   tropics: "questTropics",
 } as const;
 
+const countryName = (id: string) => {
+  const c = COUNTRIES.find((c) => c.id === id);
+  return c ? c[LANG] : id;
+};
+
 function questText(q: Quest): string {
-  return q.kind === "continent" ? t("questContinent", { continent: t(q.continent) }) : t(QUEST_TEXT[q.kind]);
+  if (q.kind === "continent") return t("questContinent", { continent: t(q.continent) });
+  if (q.kind === "country") return t("questCountry", { country: countryName(q.country) });
+  return t(QUEST_TEXT[q.kind]);
 }
 
 /**
@@ -153,7 +161,7 @@ function questAreaFilter(): ((f: AreaFC["features"][number]) => boolean) | null 
     const c: string = quest.continent;
     return (f) => f.properties.continent === c;
   }
-  if (quest.kind === "twoContinents") return () => true;
+  if (quest.kind === "twoContinents" || quest.kind === "country") return () => true;
   if (quest.kind === "islandsOnly") return (f) => f.properties.island;
   return null;
 }
@@ -168,6 +176,15 @@ function refreshHints() {
     (map.getSource("quest-areas") as maplibregl.GeoJSONSource | undefined)?.setData(fc);
   };
   if (!keep) return apply(NO_AREAS);
+  if (quest.kind === "country") {
+    fetch(`${import.meta.env.BASE_URL}hints/countries/${quest.country}.geojson`)
+      .then((r) => r.json() as Promise<AreaFC>)
+      .then((fc) => {
+        if (quest === myQuest && questAreaFilter()) apply(fc);
+      })
+      .catch(() => {}); // a hint is optional
+    return;
+  }
   continentsGeo ??= fetch(`${import.meta.env.BASE_URL}hints/continents.geojson`).then((r) => r.json() as Promise<AreaFC>);
   continentsGeo
     .then((all) => {
@@ -433,8 +450,12 @@ lockBtn.addEventListener("click", async () => {
     const [population, done] = await Promise.all([
       populationInRing(center, puzzle.radiusKm),
       // the side quest is a bonus: if the land data can't load, it just doesn't count
-      readLandBlock(center, puzzle.radiusKm)
-        .then((block) => questDone(quest, surveyRing(block, center, puzzle.radiusKm), center, puzzle.radiusKm))
+      Promise.all([
+        readLandBlock(center, puzzle.radiusKm),
+        // country quests only need the cells right around the centre
+        quest.kind === "country" ? readCountryBlock(center, 3).then((block) => countryAt(block, center)) : null,
+      ])
+        .then(([block, country]) => questDone(quest, surveyRing(block, center, puzzle.radiusKm), center, puzzle.radiusKm, country))
         .catch(() => false),
     ]);
     if (myAttempt !== attempt) return;

@@ -1,5 +1,10 @@
 import { haversineKm, KM_PER_DEG, type Block, type LngLat } from "./geo";
 import type { Puzzle } from "./puzzle";
+import COUNTRIES from "./countries.json";
+
+/** Countries a quest can ask for, in mask order (value i + 1). */
+export type Country = (typeof COUNTRIES)[number];
+export { COUNTRIES };
 
 /**
  * Side quests: an optional extra condition on the day's ring, worth a few
@@ -9,6 +14,7 @@ import type { Puzzle } from "./puzzle";
 export type Continent = "africa" | "asia" | "europe" | "northAmerica" | "southAmerica" | "oceania";
 export type Quest =
   | { kind: "continent"; continent: Continent; bonus: number }
+  | { kind: "country"; country: string; bonus: number }
   | { kind: "landlocked"; bonus: number }
   | { kind: "islandsOnly"; bonus: number }
   | { kind: "twoContinents"; bonus: number }
@@ -19,6 +25,7 @@ export type Quest =
 export const TROPIC_LAT = 23.436;
 /** Quests added after launch only appear from this puzzle on, so earlier days keep theirs. */
 export const LINE_QUESTS_FROM = 2;
+export const COUNTRY_QUESTS_FROM = 3;
 
 const CONTINENT_CODES: Record<number, Continent> = {
   1: "africa",
@@ -65,6 +72,8 @@ export function questFor(p: Puzzle): Quest {
       { kind: "southOfCapricorn", bonus: 10 },
       { kind: "tropics", bonus: 5 },
     );
+  if (p.number >= COUNTRY_QUESTS_FROM)
+    pool.push({ kind: "country", country: COUNTRIES[Math.floor(rand() * COUNTRIES.length)].id, bonus: 10 });
   return pool[Math.floor(rand() * pool.length)];
 }
 
@@ -115,8 +124,35 @@ export function surveyRing(block: Block, center: LngLat, radiusKm: number): Ring
   return s;
 }
 
-export function questDone(q: Quest, s: RingSurface, center: LngLat, radiusKm: number): boolean {
+/**
+ * Which listed country the ring is centred in (its id), or null. Uses the
+ * centre cell, or the nearest country cell within 2 km, so a ring on a
+ * coastline isn't failed by a sea cell.
+ */
+export function countryAt(block: Block, center: LngLat): string | null {
+  const { grid, rows, cols, values } = block;
+  let best: number | null = null;
+  let bestD = 2;
+  for (let r = 0; r < rows; r++) {
+    const lat = grid.originLat - (block.row0 + r + 0.5) * grid.res;
+    for (let c = 0; c < cols; c++) {
+      const v = values[r * cols + c];
+      if (!v) continue;
+      const d = haversineKm(center, { lat, lng: grid.originLng + (block.col0 + c + 0.5) * grid.res });
+      if (d <= bestD) {
+        bestD = d;
+        best = v;
+      }
+    }
+  }
+  return best ? (COUNTRIES[best - 1]?.id ?? null) : null;
+}
+
+/** `country` is the ring's centre country (countryAt), needed only for country quests. */
+export function questDone(q: Quest, s: RingSurface, center: LngLat, radiusKm: number, country: string | null = null): boolean {
   switch (q.kind) {
+    case "country":
+      return country === q.country;
     case "continent":
       return s.center !== 0 && CONTINENT_CODES[s.center & 7] === q.continent;
     case "landlocked":

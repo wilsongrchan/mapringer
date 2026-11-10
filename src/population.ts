@@ -7,6 +7,8 @@ const FINE_URL = `${BASE}population.tif`;
 const COARSE_URL = `${BASE}population_10x.tif`;
 /** Land / island / continent mask for side quests (1 arc-minute grid). */
 const LAND_URL = `${BASE}land.tif`;
+/** Country mask for country quests (see src/countries.json). */
+const COUNTRY_URL = `${BASE}countries.tif`;
 /** Rings at least this big are counted on the coarse grid. */
 export const COARSE_FROM_KM = 100;
 
@@ -48,6 +50,11 @@ export async function readBlock(center: LngLat, radiusKm: number, ringKm: number
 /** Land-mask cells within `radiusKm` of `center` (see quests.ts for the codes). */
 export async function readLandBlock(center: LngLat, radiusKm: number): Promise<Block> {
   return readFrom(await load(LAND_URL), center, radiusKm);
+}
+
+/** Country-mask cells within `radiusKm` of `center` (value = position in countries.json, 0 = none). */
+export async function readCountryBlock(center: LngLat, radiusKm: number): Promise<Block> {
+  return readFrom(await load(COUNTRY_URL), center, radiusKm);
 }
 
 async function readFrom({ image, grid }: Source, center: LngLat, radiusKm: number): Promise<Block> {

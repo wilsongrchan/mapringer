@@ -44,6 +44,13 @@ The side-quest map hints (continent and island outlines, shown on Easy and Stand
 .venv/bin/python scripts/build_hints.py public/data/land.tif public/hints/continents.geojson
 ```
 
+Country quests ("centre your ring in France") use a country mask of the countries listed in `src/countries.json` (their order is the mask's cell values, so append new ones at the end and rebuild). It writes `countries.tif` (host it with the other `.tif` files) and a small outline per country for the hint:
+
+```sh
+cd data/raw/ne && curl -LO https://raw.githubusercontent.com/nvkelso/natural-earth-vector/master/geojson/ne_10m_admin_0_countries.geojson && cd ../../..
+.venv/bin/python scripts/build_countries.py data/raw/ne src/countries.json public/data/countries.tif public/hints/countries
+```
+
 In dev, test mode is on by default: unlimited attempts, endless random puzzles (**New puzzle**), nothing saved. Use `?unlimited=0` for the real one-try-per-day rules and `?day=N` to play puzzle #N.
 
 In production, host both `.tif` files on storage that supports range requests and CORS (e.g. Cloudflare R2), then build with `VITE_POPULATION_BASE_URL=https://…/` (the folder holding them).
