@@ -806,16 +806,9 @@ dialog {
 @keyframes demo-step-2 { 0%, 10% { color: var(--muted); } 14%, 50% { color: var(--fg); } 54%, 100% { color: var(--muted); } }
 @keyframes demo-step-3 { 0%, 50% { color: var(--muted); } 54%, 100% { color: var(--fg); } }
 
-@media (prefers-reduced-motion: reduce) {
-  .demo *,
-  .demo-steps li {
-    animation: none !important;
-  }
-  .demo-pan { transform: translate(-182px, -45px); }
-  .demo-hand,
-  .demo-btn { opacity: 0; }
-  .demo-steps li { color: var(--fg); }
-}
+/* The how-to-play demo plays even with Reduce Motion on (iPhones often have it
+   enabled): it is small, slow and contained in the help dialog, and a frozen
+   frame doesn't explain the game. */
 
 /* credits: one line until opened */
 .credits {
