@@ -159,8 +159,8 @@ export function ratioForScore(s: number): number {
 }
 
 /**
- * Every ring lands in one of four levels, from its 0–100 closeness score.
- * Each level is worth a fixed share of the ring's max points. Tweak here.
+ * Every ring lands in one of four levels (its emoji), from its 0–100 closeness
+ * score. The levels are just labels: points scale smoothly with the score.
  */
 export type Level = "bullseye" | "good" | "meh" | "bad";
 // The level cut-offs, as "how many times off the target": 🎯 within 15%,
@@ -168,11 +168,11 @@ export type Level = "bullseye" | "good" | "meh" | "bad";
 const BULLSEYE_WITHIN = 1.15;
 const GOOD_WITHIN = 2;
 const minScore = (timesOff: number) => score(timesOff, 1) - 1e-9; // (exactly on the line counts)
-export const LEVELS: { level: Level; min: number; share: number; emoji: string; color: string }[] = [
-  { level: "bullseye", min: minScore(BULLSEYE_WITHIN), share: 1, emoji: "🎯", color: "#e4572e" },
-  { level: "good", min: minScore(GOOD_WITHIN), share: 0.75, emoji: "🟠", color: "#f08a5d" },
-  { level: "meh", min: 40, share: 0.4, emoji: "🟡", color: "#f6c343" },
-  { level: "bad", min: 0, share: 0, emoji: "⚪", color: "#ffffff" },
+export const LEVELS: { level: Level; min: number; emoji: string; color: string }[] = [
+  { level: "bullseye", min: minScore(BULLSEYE_WITHIN), emoji: "🎯", color: "#e4572e" },
+  { level: "good", min: minScore(GOOD_WITHIN), emoji: "🟠", color: "#f08a5d" },
+  { level: "meh", min: 40, emoji: "🟡", color: "#f6c343" },
+  { level: "bad", min: 0, emoji: "⚪", color: "#ffffff" },
 ];
 /** Score bands for the gauge, best first (one per level). */
 export const SCORE_BANDS = LEVELS.map(({ min, color }) => ({ min, color }));
@@ -189,7 +189,11 @@ export function levelOf(score: number): (typeof LEVELS)[number] {
   return LEVELS.find((l) => score >= l.min) ?? LEVELS[LEVELS.length - 1];
 }
 
-/** What a ring earns: its grade (a level, or pass / fail without the quest), emoji and points. */
+/**
+ * What a ring earns: its grade (a level, or pass / fail without the quest),
+ * emoji and points. Points run smoothly from 0 to the ring's max with the
+ * closeness score (whole numbers); a skipped quest is a flat pass / fail.
+ */
 export function gradeRing(stage: Stage, score: number, hasQuest: boolean, questDone: boolean) {
   const max = STAGES[stage].max;
   if (hasQuest && !questDone) {
@@ -197,7 +201,7 @@ export function gradeRing(stage: Stage, score: number, hasQuest: boolean, questD
     return { grade: pass ? ("pass" as const) : ("fail" as const), emoji: pass ? PASS_EMOJI : "⚪", points: pass ? max * PASS_SHARE : 0, max };
   }
   const l = levelOf(score);
-  return { grade: l.level, emoji: l.emoji, points: max * l.share, max };
+  return { grade: l.level, emoji: l.emoji, points: Math.round((max * score) / 100), max };
 }
 export type Grade = ReturnType<typeof gradeRing>["grade"];
 

@@ -155,7 +155,7 @@ const en = {
   helpMaps:
     "<strong>Maps:</strong> ring 1 is on the satellite map (80 pts), ring 2 on a plain map (100 pts), ring 3 on a blank map (150 pts).",
   helpScoring:
-    "<strong>Scoring:</strong> 🎯 full points, 🟠 75%, 🟡 40%, ⚪ none. Rings 2 and 3 have a quest: skip it and the ring is pass / fail, 🌙 for half points.",
+    "<strong>Scoring:</strong> the closer to the target, the more points (up to 80, 100 and 150). 🎯 within 15%, 🟠 within 2×, 🟡 within 5×, ⚪ further. Rings 2 and 3 have a quest: skip it and the ring is pass / fail, 🌙 for half points.",
   moreGamesLabel: "Game Rabbit: more games",
   credits: "Credits &amp; licences",
   creditsBody:
@@ -274,7 +274,7 @@ const zh: Record<Key, Entry> = {
   helpMaps:
     "<strong>地圖：</strong>第 1 圈用衛星圖（80 分），第 2 圈用淺色地圖（100 分），第 3 圈用空白地圖（150 分）。",
   helpScoring:
-    "<strong>計分：</strong>🎯 全分，🟠 75%，🟡 40%，⚪ 0 分。第 2 和第 3 圈有任務：不完成的話只計合格與否，🌙 得一半分數。",
+    "<strong>計分：</strong>越接近目標，分數越高（滿分分別為 80、100、150）。🎯 相差 15% 以內，🟠 2 倍以內，🟡 5 倍以內，⚪ 更遠。第 2 和第 3 圈有任務：不完成的話只計合格與否，🌙 得一半分數。",
   moreGamesLabel: "Game Rabbit：更多遊戲",
   credits: "鳴謝及授權",
   creditsBody:

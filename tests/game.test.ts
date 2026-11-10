@@ -109,7 +109,7 @@ describe("puzzles", () => {
     }
   });
 
-  it("grades rings into four levels, or pass / fail without the quest", () => {
+  it("labels rings with four levels, points scale smoothly, pass / fail without the quest", () => {
     expect(STAGES.map((s) => s.max)).toEqual([80, 100, 150]);
     expect([99, 75, 50, 10].map((sc) => levelOf(sc).emoji)).toEqual(["🎯", "🟠", "🟡", "⚪"]);
     // the cut-offs in "times off": 🎯 within 15%, 🟠 up to 2×
@@ -118,13 +118,14 @@ describe("puzzles", () => {
     expect(levelOf(score(117, 100)).emoji).toBe("🟠");
     expect(levelOf(score(199, 100)).emoji).toBe("🟠");
     expect(levelOf(score(50, 101)).emoji).toBe("🟡");
-    // ring 1 (no quest): straight levels
-    expect(gradeRing(0, 99, false, false)).toMatchObject({ grade: "bullseye", points: 80 });
-    expect(gradeRing(0, 80, false, false)).toMatchObject({ grade: "good", points: 60 });
-    expect(gradeRing(0, 50, false, false)).toMatchObject({ grade: "meh", points: 32 });
-    expect(gradeRing(0, 20, false, false)).toMatchObject({ grade: "bad", points: 0 });
-    // quest done: levels at full scale
-    expect(gradeRing(2, 98, true, true)).toMatchObject({ grade: "bullseye", emoji: "🎯", points: 150 });
+    // ring 1 (no quest): points = max × score, the emoji is a cut-off label
+    expect(gradeRing(0, 100, false, false)).toMatchObject({ grade: "bullseye", points: 80 });
+    expect(gradeRing(0, 99, false, false)).toMatchObject({ grade: "bullseye", points: 79 });
+    expect(gradeRing(0, 80, false, false)).toMatchObject({ grade: "good", points: 64 });
+    expect(gradeRing(0, 50, false, false)).toMatchObject({ grade: "meh", points: 40 });
+    expect(gradeRing(0, 20, false, false)).toMatchObject({ grade: "bad", points: 16 });
+    // quest done: the same, at the ring's own max
+    expect(gradeRing(2, 98, true, true)).toMatchObject({ grade: "bullseye", emoji: "🎯", points: 147 });
     expect(gradeRing(1, 75, true, true)).toMatchObject({ grade: "good", points: 75 });
     // quest not done: pass (60+) for half, else fail
     expect(gradeRing(1, 99, true, false)).toMatchObject({ grade: "pass", emoji: "🌙", points: 50 });
