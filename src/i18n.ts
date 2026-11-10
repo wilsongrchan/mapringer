@@ -109,13 +109,11 @@ const en = {
   tropicCancer: "Tropic of Cancer",
   tropicCapricorn: "Tropic of Capricorn",
 
-  bullseye: "Bullseye! 🎯",
-  close: "So close. Great ring.",
-  solid: "Solid placement.",
-  ballparkCrowded: "In the ballpark, but too crowded.",
-  ballparkEmpty: "In the ballpark, but too empty.",
-  wayTooMany: "Way too many people!",
-  wayTooFew: "Way too few people!",
+  // result verdicts: one is picked per result ("|" separates the choices)
+  verdictGood: "Ring-markable!|Top of the ring!|Good ring! Good ring!",
+  verdictMeh: "If only I could forget this ring…|It's a ring trap!|You really think outside the ring!",
+  verdictBad: "Next time, maybe try circling zero people…|Who am I? Where am I?",
+  verdictOcean: "People don't usually live in the sea…",
 
   gaugeTarget: "target",
   nobody: "Nobody lives there!",
@@ -141,17 +139,18 @@ const en = {
   howToPlay: "How to play",
   demoResult: "<strong>49,800</strong> people · target 51,000 · <strong>100</strong> 🎯",
   step1: "Each day: one ring size, one target population.",
-  step2: "Pan the map to move the ring over a place you think fits.",
+  step2: "Spin the globe and zoom in to put the ring over a place you think fits.",
   step3:
     "Lock it in. You get <strong>one</strong> try, then see the real count and the closest ring that would have hit it.",
   helpMaps:
-    "<strong>Maps:</strong> Hard (land, lakes, rivers) ×1.2 · Standard (no roads) ×1 · Easy (satellite) ×0.8. You start on Hard and can only switch to an easier map.",
+    "<strong>Maps:</strong> you start on Hard. You can switch to an easier map for fewer points, but never back.",
   helpScoring:
-    "<strong>Scoring</strong> (out of 100): within 5% of the target is a perfect 100. After that it drops on a log scale: 2× too many (or too few) scores about 70, 10× off about 27.",
+    "<strong>Scoring:</strong> the closer to the target, the higher your score (up to 100).",
+  moreGamesLabel: "Game Rabbit: more games",
   credits: "Credits &amp; licences",
   creditsBody:
     'Population: <a href="https://human-settlement.emergency.copernicus.eu/ghs_pop2023.php" target="_blank" rel="noopener">GHSL GHS-POP R2023A</a> (2025 estimate, 1 km grid), European Commission JRC, CC BY 4.0. Map: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © OpenMapTiles © OpenStreetMap contributors. Satellite imagery © Esri, Maxar, Earthstar Geographics. Place names: <a href="https://nominatim.org" target="_blank" rel="noopener">Nominatim</a> / OpenStreetMap. Inspired by Tom Forth\'s <a href="https://tomforth.co.uk/circlepopulations/" target="_blank" rel="noopener">circle populations</a>.',
-  gotIt: "Got it",
+  closeLabel: "Close",
 } satisfies Record<string, Entry>;
 
 type Key = keyof typeof en;
@@ -224,13 +223,10 @@ const zh: Record<Key, Entry> = {
   tropicCancer: "北回歸線",
   tropicCapricorn: "南回歸線",
 
-  bullseye: "正中目標！🎯",
-  close: "非常接近，好圈！",
-  solid: "放得不錯。",
-  ballparkCrowded: "差不多，但人太多了。",
-  ballparkEmpty: "差不多，但人太少了。",
-  wayTooMany: "人太多了！",
-  wayTooFew: "人太少了！",
+  verdictGood: "可圈可點！|你最終爬上了圈裡之巔。|好圈！好圈！",
+  verdictMeh: "如果，圈世界我也可以忘記⋯⋯|這是一個圈套！|你很懂得跳出圈圈哦！",
+  verdictBad: "下一次讓你圈0個人吧⋯⋯|我是誰？我在哪裡？",
+  verdictOcean: "通常大海裡不住人⋯⋯",
 
   gaugeTarget: "目標",
   nobody: "那裡沒有人住！",
@@ -255,16 +251,17 @@ const zh: Record<Key, Entry> = {
   howToPlay: "玩法",
   demoResult: "<strong>49,800</strong> 人 · 目標 51,000 · <strong>100</strong> 🎯",
   step1: "每天一題：一個圈的大小，一個目標人口。",
-  step2: "拖動地圖，把圈移到你認為人數剛好的地方。",
+  step2: "轉動地球、放大地圖，把圈移到你認為人數剛好的地方。",
   step3: "鎖定圈圈。你只有<strong>一次</strong>機會，之後會顯示真實人數，以及最近的正確圈。",
   helpMaps:
-    "<strong>地圖：</strong>困難（只有陸地、湖泊、河流）×1.2 · 標準（沒有道路）×1 · 簡單（衛星圖）×0.8。一開始是困難模式，只能轉到較簡單的地圖。",
+    "<strong>地圖：</strong>一開始是困難模式。可以轉到較簡單的地圖（分數較少），但不能轉回去。",
   helpScoring:
-    "<strong>計分</strong>（滿分 100）：與目標相差 5% 以內就是滿分。之後按對數遞減：多了或少了 2 倍約 70 分，相差 10 倍約 27 分。",
+    "<strong>計分：</strong>越接近目標，分數越高（滿分 100）。",
+  moreGamesLabel: "Game Rabbit：更多遊戲",
   credits: "鳴謝及授權",
   creditsBody:
     '人口：<a href="https://human-settlement.emergency.copernicus.eu/ghs_pop2023.php" target="_blank" rel="noopener">GHSL GHS-POP R2023A</a>（2025 年估算，1 公里網格），歐盟委員會聯合研究中心（JRC），CC BY 4.0。地圖：<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © OpenMapTiles © OpenStreetMap 貢獻者。衛星圖像 © Esri, Maxar, Earthstar Geographics。地名：<a href="https://nominatim.org" target="_blank" rel="noopener">Nominatim</a> / OpenStreetMap。靈感來自 Tom Forth 的 <a href="https://tomforth.co.uk/circlepopulations/" target="_blank" rel="noopener">circle populations</a>。',
-  gotIt: "明白",
+  closeLabel: "關閉",
 };
 
 const table: Record<Key, Entry> = LANG === "zh" ? zh : en;

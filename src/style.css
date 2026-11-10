@@ -217,7 +217,8 @@ a {
 
 .result-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  /* minmax(0, …): long one-line place names get "…" instead of widening the panel */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 12px;
 }
 
@@ -722,61 +723,12 @@ dialog {
   margin: 4px 0 12px;
 }
 
-.demo-map {
+.demo-video {
   display: block;
   width: 100%;
   height: auto;
-}
-
-.demo-sea { fill: #cfdde6; }
-.demo-land { fill: #f2efe9; }
-.demo-river { fill: none; stroke: #b5cbd8; stroke-width: 3; }
-.demo-city { fill: #8d8a85; opacity: 0.55; }
-.demo-town { fill: #8d8a85; opacity: 0.4; }
-
-@media (prefers-color-scheme: dark) {
-  .demo-sea { fill: #1d2a33; }
-  .demo-land { fill: #2a2c30; }
-  .demo-river { stroke: #34495a; }
-  .demo-city,
-  .demo-town { fill: #c9c5bd; }
-}
-
-.demo-ring {
-  fill: rgba(228, 87, 46, 0.14);
-  stroke: var(--accent);
-  stroke-width: 3;
-  animation: demo-ring 6s infinite;
-}
-
-.demo-dot { fill: var(--accent); stroke: #fff; stroke-width: 1.5; }
-
-/* the map slides left so the far city drifts under the ring */
-.demo-pan { animation: demo-pan 6s infinite cubic-bezier(0.45, 0, 0.25, 1); }
-
-/* a "finger" drags the map */
-.demo-hand circle {
-  fill: rgba(0, 0, 0, 0.18);
-  stroke: rgba(255, 255, 255, 0.9);
-  stroke-width: 2;
-}
-.demo-hand { animation: demo-hand 6s infinite cubic-bezier(0.45, 0, 0.25, 1); }
-
-@keyframes demo-pan {
-  0%, 12% { transform: translate(0, 0); }
-  45%, 100% { transform: translate(-182px, -45px); }
-}
-
-@keyframes demo-hand {
-  0% { transform: translate(250px, 120px); opacity: 0; }
-  8%, 12% { transform: translate(250px, 120px); opacity: 1; }
-  45% { transform: translate(68px, 75px); opacity: 1; }
-  52%, 100% { transform: translate(68px, 75px); opacity: 0; }
-}
-
-@keyframes demo-ring {
-  0%, 62% { fill: rgba(228, 87, 46, 0.14); stroke: var(--accent); }
-  70%, 100% { fill: rgba(42, 157, 143, 0.25); stroke: var(--good); }
+  aspect-ratio: 300 / 160;
+  background: #0b111c;
 }
 
 .demo-ui {
@@ -798,34 +750,38 @@ dialog {
   white-space: nowrap;
 }
 
+/* overlay phases follow the video's clock (main.ts sets data-phase) */
 .demo-btn {
   background: var(--accent);
   color: var(--accent-fg);
   font-weight: 600;
-  animation: demo-btn 6s infinite;
+  transition: transform 0.15s, opacity 0.2s;
 }
 
 .demo-result {
   background: var(--card);
   color: var(--fg);
   box-shadow: var(--shadow);
-  animation: demo-result 6s infinite;
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 0.25s, transform 0.25s;
 }
 
-@keyframes demo-btn {
-  0%, 50% { opacity: 1; transform: scale(1); }
-  56% { opacity: 1; transform: scale(0.9); }
-  60% { opacity: 1; transform: scale(1); }
-  64%, 100% { opacity: 0; transform: scale(1); }
+.demo[data-phase="lock"] .demo-btn {
+  transform: scale(0.9);
 }
 
-@keyframes demo-result {
-  0%, 64% { opacity: 0; transform: translateY(6px); }
-  70%, 96% { opacity: 1; transform: translateY(0); }
-  100% { opacity: 0; transform: translateY(0); }
+.demo[data-phase="result"] .demo-btn,
+.demo[data-phase="end"] .demo-btn {
+  opacity: 0;
 }
 
-/* steps light up in time with the animation */
+.demo[data-phase="result"] .demo-result {
+  opacity: 1;
+  transform: none;
+}
+
+/* steps light up with the clip */
 .demo-steps {
   margin: 0 0 8px;
   padding-left: 20px;
@@ -833,14 +789,19 @@ dialog {
   font-size: 15px;
 }
 
-.demo-steps li { animation: demo-step 6s infinite; }
-.demo-steps .s1 { animation-name: demo-step-1; }
-.demo-steps .s2 { animation-name: demo-step-2; }
-.demo-steps .s3 { animation-name: demo-step-3; }
+.demo-steps li {
+  color: var(--muted);
+  transition: color 0.2s;
+}
 
-@keyframes demo-step-1 { 0%, 10% { color: var(--fg); } 14%, 100% { color: var(--muted); } }
-@keyframes demo-step-2 { 0%, 10% { color: var(--muted); } 14%, 50% { color: var(--fg); } 54%, 100% { color: var(--muted); } }
-@keyframes demo-step-3 { 0%, 50% { color: var(--muted); } 54%, 100% { color: var(--fg); } }
+.demo:not([data-phase]) + .demo-steps li,
+.demo[data-phase="rules"] + .demo-steps .s1,
+.demo[data-phase="move"] + .demo-steps .s2,
+.demo[data-phase="lock"] + .demo-steps .s3,
+.demo[data-phase="result"] + .demo-steps .s3,
+.demo[data-phase="end"] + .demo-steps .s3 {
+  color: var(--fg);
+}
 
 /* The how-to-play demo plays even with Reduce Motion on (iPhones often have it
    enabled): it is small, slow and contained in the help dialog, and a frozen
@@ -1197,4 +1158,112 @@ dialog.confirm .dialog-actions button {
   .next {
     font-size: 12px;
   }
+}
+
+/* ---- help: the same spot on each map ---- */
+.map-shots {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin: -4px 0 12px;
+}
+
+.map-shots figure {
+  margin: 0;
+}
+
+.map-shots img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.map-shots figcaption {
+  margin-top: 3px;
+  font-size: 12px;
+  text-align: center;
+  color: var(--muted);
+}
+
+/* ---- Game Rabbit logo (Game_Site/BRANDING.md) ---- */
+.grb {
+  display: block;
+  margin: 14px auto 0;
+  width: max-content;
+  opacity: 0.8;
+  transition: opacity 0.15s;
+}
+
+.grb:hover,
+.grb:focus-visible {
+  opacity: 1;
+}
+
+.grb .grm {
+  display: block;
+  height: 30px;
+  width: auto;
+}
+
+/* black logo on the light theme, white on dark */
+.grb .grm.dk {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .grb .grm.lt {
+    display: none;
+  }
+
+  .grb .grm.dk {
+    display: block;
+  }
+}
+
+/* ---- dialog header: title + a close button that stays put while scrolling ---- */
+.dialog-head {
+  position: sticky;
+  top: -20px;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: -20px -20px 8px;
+  padding: 14px 12px 10px 20px;
+  background: var(--card);
+  backdrop-filter: blur(8px);
+}
+
+.dialog-head h2 {
+  margin: 0;
+}
+
+.dialog-x {
+  flex: none;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: var(--border);
+  font-size: 15px;
+  line-height: 1;
+}
+
+/* dialogs are solid, so the game behind doesn't show through the text */
+dialog.card {
+  background: var(--bg);
+}
+
+.dialog-head {
+  background: var(--bg);
+}
+
+/* focus ring on ✕ only for keyboard users (it gets focus when the dialog opens) */
+.dialog-x:focus:not(:focus-visible) {
+  outline: none;
 }

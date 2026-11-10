@@ -11,6 +11,7 @@ export interface Result {
   points: number; // (score + side-quest bonus) × difficulty multiplier (older saves: score × multiplier + bonus)
   questDone?: boolean; // side quest condition met
   bonus?: number; // side-quest points actually earned
+  seaShare?: number; // fraction of the ring that is sea (for the verdict)
 }
 
 const key = (n: number) => `mapringer:result:${n}`;

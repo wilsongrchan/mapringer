@@ -55,7 +55,9 @@ let difficulty: Difficulty = locked?.difficulty ?? "hard";
  * globe, zoom z draws Earth about 512·2^z/π px across.
  */
 function wholeGlobeZoom(): number {
-  const room = Math.min(innerWidth, innerHeight - 260) * 0.92;
+  // (never below 160 px: on very short screens, e.g. a phone in landscape, the
+  // panels would otherwise leave no room at all and the zoom would be invalid)
+  const room = Math.max(160, Math.min(innerWidth, innerHeight - 260)) * 0.92;
   return Math.max(0.6, Math.min(2.2, Math.log2((room * Math.PI) / 512)));
 }
 
@@ -451,6 +453,7 @@ lockBtn.addEventListener("click", async () => {
   lockBtn.disabled = true;
   lockBtn.textContent = t("counting");
   try {
+    let seaShare: number | undefined;
     const [population, done] = await Promise.all([
       populationInRing(center, puzzle.radiusKm),
       // the side quest is a bonus: if the land data can't load, it just doesn't count
@@ -459,7 +462,11 @@ lockBtn.addEventListener("click", async () => {
         // country quests only need the cells right around the centre
         quest.kind === "country" ? readCountryBlock(center, 3).then((block) => countryAt(block, center)) : null,
       ])
-        .then(([block, country]) => questDone(quest, surveyRing(block, center, puzzle.radiusKm), center, puzzle.radiusKm, country))
+        .then(([block, country]) => {
+          const surface = surveyRing(block, center, puzzle.radiusKm);
+          seaShare = surface.seaShare;
+          return questDone(quest, surface, center, puzzle.radiusKm, country);
+        })
         .catch(() => false),
     ]);
     if (myAttempt !== attempt) return;
@@ -473,6 +480,7 @@ lockBtn.addEventListener("click", async () => {
       score: s,
       difficulty,
       questDone: done,
+      seaShare,
       bonus,
       // the side-quest bonus is added first, so the map multiplier applies to it too
       points: (s + bonus) * DIFFICULTIES[difficulty].multiplier,
@@ -489,13 +497,16 @@ lockBtn.addEventListener("click", async () => {
 });
 
 // ---- results ----
+/**
+ * A fun one-liner for the result (the caption beside it already says how far
+ * off it was). Picked from the tier's list, the same way every time for the
+ * same result, so a reload doesn't change it.
+ */
 function verdict(r: Result): string {
-  const a = r.score;
-  if (r.accuracy >= MATCH_ACCURACY) return t("bullseye");
-  if (a >= 90) return t("close");
-  if (a >= 75) return t("solid");
-  if (a >= 50) return t(r.population > puzzle.target ? "ballparkCrowded" : "ballparkEmpty");
-  return t(r.population > puzzle.target ? "wayTooMany" : "wayTooFew");
+  if (r.score < 40 && (r.seaShare ?? 0) >= 0.5) return t("verdictOcean");
+  const lines = t(r.score >= 75 ? "verdictGood" : r.score >= 40 ? "verdictMeh" : "verdictBad").split("|");
+  const seed = Math.abs(Math.round(r.lng * 1000) * 31 + Math.round(r.lat * 1000) * 7 + r.puzzle);
+  return lines[seed % lines.length];
 }
 
 let lastBounds: maplibregl.LngLatBounds | null = null;
@@ -958,6 +969,30 @@ $("share-btn").addEventListener("click", async () => {
 // ---- help ----
 const helpDialog = $<HTMLDialogElement>("help-dialog");
 $("help-btn").addEventListener("click", () => helpDialog.showModal());
+
+/**
+ * How-to-play demo: a 7 s clip recorded from the real game (spin the globe,
+ * zoom into Hong Kong, the ring turns green at 5.3 s). The lock button, the
+ * result chip and the step highlights follow the video's own clock.
+ */
+{
+  const video = $<HTMLVideoElement>("demo-video");
+  const demo = $("demo");
+  video.src = `${import.meta.env.BASE_URL}help/demo-${LANG}.mp4`;
+  video.poster = `${import.meta.env.BASE_URL}help/demo-${LANG}.jpg`;
+  const sync = () => {
+    const s = video.currentTime;
+    demo.dataset.phase = s < 0.4 ? "rules" : s < 4.9 ? "move" : s < 5.3 ? "lock" : s < 6.8 ? "result" : "end";
+    if (helpDialog.open) requestAnimationFrame(sync);
+  };
+  const start = () => {
+    video.currentTime = 0;
+    video.play().catch(() => {}); // autoplay can be blocked (e.g. Low Power Mode): the poster shows
+    requestAnimationFrame(sync);
+  };
+  new MutationObserver(() => (helpDialog.open ? start() : video.pause())).observe(helpDialog, { attributes: true, attributeFilter: ["open"] });
+  if (helpDialog.open) start();
+}
 $("lang-btn").addEventListener("click", switchLanguage);
 $("help-close").addEventListener("click", () => helpDialog.close());
 try {

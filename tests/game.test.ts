@@ -288,7 +288,7 @@ describe.skipIf(!existsSync(LAND))("side quests on the real land mask", async ()
 
   it("line quests: hemispheres and tropics, judged on the whole ring", async () => {
     const at = (lat: number, lng: number, r: number) => (kind: "west" | "east" | "northOfCancer" | "southOfCapricorn" | "tropics") =>
-      questDone({ kind, bonus: 5 }, { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, continents: new Set() }, { lat, lng }, r);
+      questDone({ kind, bonus: 5 }, { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, seaShare: 0, continents: new Set() }, { lat, lng }, r);
     // London straddles the prime meridian with a big ring, but not a tiny one west of it
     expect(at(51.5, -0.13, 50)("west")).toBe(false);
     expect(at(51.5, -0.5, 10)("west")).toBe(true);
@@ -302,6 +302,15 @@ describe.skipIf(!existsSync(LAND))("side quests on the real land mask", async ()
     expect(at(-34, 151, 20)("southOfCapricorn")).toBe(true);
     expect(at(0, 30, 100)("tropics")).toBe(true);
     expect(at(23, 30, 100)("tropics")).toBe(false);
+  });
+
+  it("measures how much of the ring is sea (for the verdict)", async () => {
+    const share = async (center: LngLat, r: number) => surveyRing(await readLand(center, r), center, r).seaShare;
+    expect(await share({ lat: -20, lng: -140 }, 50)).toBe(1); // mid-Pacific
+    expect(await share({ lat: 48.85, lng: 2.35 }, 10)).toBe(0); // Paris
+    const hk = await share({ lat: 22.25, lng: 114.15 }, 20); // Hong Kong: islands and harbour
+    expect(hk).toBeGreaterThan(0.2);
+    expect(hk).toBeLessThan(0.8);
   });
 
   it("open ocean centre counts as no continent", async () => {
@@ -357,7 +366,7 @@ describe.skipIf(!existsSync(COUNTRY_TIF))("country quests on the real country ma
     const picks = Array.from({ length: 400 }, (_, i) => questFor(puzzleFor(COUNTRY_QUESTS_FROM + i))).filter((q) => q.kind === "country");
     expect(picks.length).toBeGreaterThan(10);
     for (const q of picks) expect(COUNTRIES.some((c) => c.id === (q as { country: string }).country)).toBe(true);
-    const none = { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, continents: new Set<never>() };
+    const none = { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, seaShare: 0, continents: new Set<never>() };
     const q = { kind: "country" as const, country: "FRA", bonus: 10 };
     expect(questDone(q, none, { lat: 48.85, lng: 2.35 }, 10, "FRA")).toBe(true);
     expect(questDone(q, none, { lat: 48.85, lng: 2.35 }, 10, "DEU")).toBe(false);

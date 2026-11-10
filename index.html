@@ -94,29 +94,15 @@
       </div>
     </footer>
 
-    <dialog id="help-dialog" class="card">
-      <h2 data-i18n="howToPlay">How to play</h2>
+    <dialog id="help-dialog" class="card" autofocus>
+      <div class="dialog-head">
+        <h2 data-i18n="howToPlay">How to play</h2>
+        <button class="dialog-x" id="help-close" data-i18n-label="closeLabel" aria-label="Close">✕</button>
+      </div>
 
-      <div class="demo" aria-hidden="true">
-        <svg viewBox="0 0 300 160" class="demo-map">
-          <!-- the "map" pans under a fixed ring, just like the game -->
-          <g class="demo-pan">
-            <rect x="-200" y="-150" width="700" height="460" class="demo-sea" />
-            <path class="demo-land" d="M-150 40 C -60 -40, 80 -60, 190 -20 C 300 20, 420 -10, 480 60 C 520 140, 430 230, 330 250 C 220 270, 120 230, 40 250 C -60 270, -170 200, -150 40 Z" />
-            <path class="demo-river" d="M60 -40 C 90 30, 70 90, 130 130 C 180 160, 200 210, 260 250" />
-            <circle class="demo-city" cx="330" cy="120" r="9" />
-            <circle class="demo-city" cx="352" cy="138" r="5" />
-            <circle class="demo-city" cx="300" cy="140" r="4" />
-            <circle class="demo-town" cx="40" cy="80" r="3" />
-            <circle class="demo-town" cx="150" cy="40" r="3" />
-            <circle class="demo-town" cx="420" cy="60" r="3" />
-          </g>
-          <circle class="demo-ring" cx="150" cy="80" r="38" />
-          <circle class="demo-dot" cx="150" cy="80" r="3.5" />
-          <g class="demo-hand">
-            <circle cx="0" cy="0" r="9" />
-          </g>
-        </svg>
+      <div class="demo" id="demo" aria-hidden="true">
+        <!-- recorded from the real game (scripts/record_demo.mjs); main.ts picks the language and syncs the overlay -->
+        <video class="demo-video" id="demo-video" width="300" height="160" muted loop playsinline preload="none"></video>
         <div class="demo-ui">
           <span class="demo-btn" data-i18n="lockIn">Lock in ring</span>
           <span class="demo-result" data-i18n-html="demoResult"><strong>49,800</strong> people · target 51,000 · <strong>100</strong> 🎯</span>
@@ -130,6 +116,12 @@
       </ol>
 
       <p class="small" data-i18n-html="helpMaps"></p>
+      <!-- the same spot (Hong Kong) on each map -->
+      <div class="map-shots">
+        <figure><img src="help/map-hard.jpg" alt="" width="240" height="240" loading="lazy" /><figcaption><span data-i18n="diffHard">Hard</span> ×1.2</figcaption></figure>
+        <figure><img src="help/map-standard.jpg" alt="" width="240" height="240" loading="lazy" /><figcaption><span data-i18n="diffStandard">Standard</span> ×1</figcaption></figure>
+        <figure><img src="help/map-easy.jpg" alt="" width="240" height="240" loading="lazy" /><figcaption><span data-i18n="diffEasy">Easy</span> ×0.8</figcaption></figure>
+      </div>
       <p class="small" data-i18n-html="helpScoring"></p>
 
       <details class="credits">
@@ -137,9 +129,11 @@
         <p class="small" data-i18n-html="creditsBody"></p>
       </details>
 
-      <div class="dialog-actions">
-        <button class="primary" id="help-close" autofocus data-i18n="gotIt">Got it</button>
-      </div>
+      <!-- Game Rabbit logo, back to the hub (see Game_Site/BRANDING.md) -->
+      <a class="grb" href="https://gamerabbit.io/" data-i18n-label="moreGamesLabel" aria-label="Game Rabbit: more games">
+        <img class="grm lt" src="brand/gr-stack-dark.png" alt="Game Rabbit" width="93" height="30" />
+        <img class="grm dk" src="brand/gr-stack-light.png" alt="Game Rabbit" width="93" height="30" />
+      </a>
     </dialog>
 
     <dialog id="confirm-dialog" class="card confirm">

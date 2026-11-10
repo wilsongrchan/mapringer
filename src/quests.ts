@@ -84,6 +84,7 @@ export interface RingSurface {
   touchesMainland: boolean;
   touchesIsland: boolean;
   continents: Set<Continent>;
+  seaShare: number; // fraction of the ring's cells that are sea (0–1)
 }
 
 /** Summarise the land-mask cells whose centres lie inside the ring. */
@@ -96,7 +97,10 @@ export function surveyRing(block: Block, center: LngLat, radiusKm: number): Ring
     touchesMainland: false,
     touchesIsland: false,
     continents: new Set(),
+    seaShare: 0,
   };
+  let cells = 0;
+  let sea = 0;
   let nearest = Infinity;
   const latR = radiusKm / KM_PER_DEG;
   for (let r = 0; r < rows; r++) {
@@ -111,8 +115,10 @@ export function surveyRing(block: Block, center: LngLat, radiusKm: number): Ring
         s.center = v;
       }
       if (d > radiusKm) continue;
+      cells++;
       if (v === 0) {
         s.touchesSea = true;
+        sea++;
         continue;
       }
       if (v & 8) s.touchesIsland = true;
@@ -121,6 +127,7 @@ export function surveyRing(block: Block, center: LngLat, radiusKm: number): Ring
       if (cont) s.continents.add(cont);
     }
   }
+  s.seaShare = cells ? sea / cells : 0;
   return s;
 }
 
