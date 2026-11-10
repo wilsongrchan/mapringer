@@ -1,4 +1,5 @@
 import type { LngLat } from "./geo";
+import { LANG, PLACE_LANG, t } from "./i18n";
 
 /**
  * Reverse-geocode a point to "Town, Country" using OpenStreetMap Nominatim.
@@ -27,17 +28,18 @@ function format(a: NominatimAddress | undefined): string {
   if (!a) return "";
   const local = a.city ?? a.town ?? a.village ?? a.hamlet ?? a.municipality ?? a.county ?? a.state_district;
   const parts = [local, local ? undefined : (a.state ?? a.region), a.country].filter(Boolean);
-  return parts.join(", ");
+  // Chinese addresses run from big to small: 英國 牛津
+  return LANG === "zh" ? parts.reverse().join(" ") : parts.join(", ");
 }
 
 async function lookup(p: LngLat): Promise<string> {
   const url =
-    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&accept-language=en` +
+    `https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=10&accept-language=${encodeURIComponent(PLACE_LANG)}` +
     `&lat=${p.lat.toFixed(5)}&lon=${p.lng.toFixed(5)}`;
   const res = await fetch(url, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`Nominatim ${res.status}`);
   const data = (await res.json()) as { address?: NominatimAddress; error?: string };
-  return format(data.address) || "Open water / unnamed area";
+  return format(data.address) || t("unnamed");
 }
 
 export function placeName(p: LngLat): Promise<string> {

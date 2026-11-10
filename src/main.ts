@@ -4,6 +4,7 @@ import "maplibre-gl/dist/maplibre-gl.css";
 // hand MapLibre the URL, otherwise dep pre-bundling breaks the worker path.
 import maplibreWorkerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
 import "./style.css";
+import { applyStaticText, LANG, switchLanguage, t } from "./i18n";
 import { findClosestAnswer, MATCH_ACCURACY, type AnswerResult } from "./answer";
 import { applyMapStyle, DIFFICULTIES, DIFFICULTY_ORDER, type Difficulty } from "./difficulty";
 import { circleRing, type LngLat } from "./geo";
@@ -15,6 +16,7 @@ import { loadResult, saveResult, type Result } from "./storage";
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
 maplibregl.setWorkerUrl(maplibreWorkerUrl);
+applyStaticText();
 
 // Test options: ?day=N plays puzzle #N; ?unlimited (on by default in dev,
 // ?unlimited=0 to turn off) allows unlimited attempts, endless random
@@ -46,7 +48,7 @@ const map = new maplibregl.Map({
 map.touchZoomRotate.disableRotation();
 map.keyboard.disableRotation();
 if (import.meta.env.DEV) (window as unknown as { __map: maplibregl.Map }).__map = map; // for debugging
-applyMapStyle(map, difficulty);
+applyMapStyle(map, difficulty, LANG);
 
 /** "an 8 km ring", "an 80 km ring", "an 11 km ring", otherwise "a …". */
 const article = (n: number) => (String(n).startsWith("8") || n === 11 || n === 18 ? "an" : "a");
@@ -60,17 +62,20 @@ function fitOneLine(el: HTMLElement, maxPx: number, minPx = 11) {
 const fitChallenge = () => fitOneLine($("challenge-line"), 19);
 
 function renderPuzzle() {
-  $("puzzle-num").textContent = practice ? "· practice" : `#${puzzle.number}${UNLIMITED ? " · test" : ""}`;
+  $("puzzle-num").textContent = practice ? t("practiceTag") : `#${puzzle.number}${UNLIMITED ? t("testTag") : ""}`;
   $("challenge-label").textContent =
     puzzle.twist === "empty-giant"
-      ? "Twist · a giant, empty ring"
+      ? t("twistGiant")
       : puzzle.twist === "packed-tiny"
-        ? "Twist · a tiny, packed ring"
+        ? t("twistTiny")
         : practice
-          ? "Practice ring"
-          : "Today's ring";
-  $("target").textContent = fmt(puzzle.target);
-  $("radius").textContent = `${article(puzzle.radiusKm)} ${fmt(puzzle.radiusKm)} km ring`;
+          ? t("practiceRing")
+          : t("todaysRing");
+  $("challenge-line").innerHTML = t("challengeLine", {
+    target: fmt(puzzle.target),
+    radius: fmt(puzzle.radiusKm),
+    article: article(puzzle.radiusKm),
+  });
   fitChallenge();
 }
 renderPuzzle();
@@ -78,7 +83,7 @@ addEventListener("resize", fitChallenge);
 document.fonts?.ready.then(fitChallenge);
 
 if (UNLIMITED) {
-  $("play-hint").textContent = "Test mode: unlimited attempts and puzzles, nothing is saved.";
+  $("play-hint").textContent = t("testHint");
   $("test-actions").hidden = false;
   $("next-info").hidden = true;
 }
@@ -198,7 +203,7 @@ function renderDifficulty() {
     btn.disabled = d !== difficulty && (difficultyLocked || harder);
   }
   const info = DIFFICULTIES[difficulty];
-  $("difficulty-info").textContent = `${info.blurb} · ×${info.multiplier} points${difficultyLocked ? " · locked for today" : ""}`;
+  $("difficulty-info").textContent = t("diffInfo", { blurb: info.blurb, mult: info.multiplier, locked: difficultyLocked ? 1 : "" });
 }
 
 $("difficulty").addEventListener("click", (e) => {
@@ -206,7 +211,7 @@ $("difficulty").addEventListener("click", (e) => {
   if (!d || d === difficulty || difficultyLocked) return;
   if (DIFFICULTY_ORDER.indexOf(d) > DIFFICULTY_ORDER.indexOf(difficulty)) return; // no going back up
   difficulty = d;
-  applyMapStyle(map, d);
+  applyMapStyle(map, d, LANG);
   renderDifficulty();
 });
 
@@ -226,7 +231,7 @@ lockBtn.addEventListener("click", async () => {
   const center = { lng: c.lng, lat: c.lat };
   const myAttempt = attempt;
   lockBtn.disabled = true;
-  lockBtn.textContent = "Counting people…";
+  lockBtn.textContent = t("counting");
   try {
     const population = await populationInRing(center, puzzle.radiusKm);
     if (myAttempt !== attempt) return;
@@ -236,20 +241,20 @@ lockBtn.addEventListener("click", async () => {
     showResult(result, true);
   } catch (e) {
     console.error(e);
-    toast("Couldn't load population data. Check your connection and try again.");
+    toast(t("loadFailed"));
     lockBtn.disabled = false;
-    lockBtn.textContent = "Lock in ring";
+    lockBtn.textContent = t("lockIn");
   }
 });
 
 // ---- results ----
 function verdict(r: Result): string {
   const a = r.score;
-  if (r.accuracy >= MATCH_ACCURACY) return "Bullseye! 🎯";
-  if (a >= 90) return "So close. Great ring.";
-  if (a >= 75) return "Solid placement.";
-  if (a >= 50) return `In the ballpark, but ${r.population > puzzle.target ? "too crowded" : "too empty"}.`;
-  return r.population > puzzle.target ? "Way too many people!" : "Way too few people!";
+  if (r.accuracy >= MATCH_ACCURACY) return t("bullseye");
+  if (a >= 90) return t("close");
+  if (a >= 75) return t("solid");
+  if (a >= 50) return t(r.population > puzzle.target ? "ballparkCrowded" : "ballparkEmpty");
+  return t(r.population > puzzle.target ? "wayTooMany" : "wayTooFew");
 }
 
 let lastBounds: maplibregl.LngLatBounds | null = null;
@@ -264,7 +269,7 @@ function fitRings(rings: { center: LngLat; radiusKm: number }[], duration: numbe
 function setCollapsed(collapsed: boolean, refit = true) {
   $("result-panel").classList.toggle("collapsed", collapsed);
   $("result-toggle").setAttribute("aria-expanded", String(!collapsed));
-  $("result-toggle-label").textContent = collapsed ? "Show results" : "Hide results";
+  $("result-toggle-label").textContent = t(collapsed ? "showResults" : "hideResults");
   if (refit && lastBounds) map.fitBounds(lastBounds, { padding: padding(), duration: 400, maxZoom: 13 });
 }
 $("result-toggle").addEventListener("click", () =>
@@ -325,7 +330,7 @@ function renderGaugeBands() {
     span.textContent = text;
     labels.append(span);
   };
-  add(0, "target");
+  add(0, t("gaugeTarget"));
   for (const e of edges.slice(1)) {
     const x = ratioForScore(SCORE_BANDS[edges.indexOf(e)].min);
     const t = x >= 10 ? fmt(x) : x.toFixed(0);
@@ -338,13 +343,13 @@ const gaugePos = (ratio: number) =>
   ratio <= 0 ? 0 : 50 + 50 * Math.max(-1, Math.min(1, Math.log10(ratio) / GAUGE_DECADES));
 
 function gaugeCaption(r: Result): string {
-  if (r.population <= 0) return "Nobody lives there!";
-  if (r.accuracy >= MATCH_ACCURACY) return "Right on target";
+  if (r.population <= 0) return t("nobody");
+  if (r.accuracy >= MATCH_ACCURACY) return t("onTarget");
   const ratio = r.population / puzzle.target;
   const over = ratio > 1;
   const factor = over ? ratio : 1 / ratio;
   const amount = factor < 2 ? `${Math.round((factor - 1) * 100)}%` : `${factor < 10 ? factor.toFixed(1) : fmt(factor)}×`;
-  return `${amount} too ${over ? "many" : "few"} people`;
+  return t(over ? "tooMany" : "tooFew", { amount });
 }
 
 function renderGauge(r: Result, animate: boolean) {
@@ -387,9 +392,14 @@ function showResult(r: Result, animate: boolean) {
   const mult = DIFFICULTIES[r.difficulty].multiplier;
   $("result-bar").textContent = emojiBar(r.score);
   $("result-acc").textContent = `${r.score.toFixed(1)}`;
-  $("result-summary").innerHTML = `<strong>${fmt(r.population)}</strong> people · ${emojiBar(r.score)} <strong>${(mult === 1 ? r.score : r.points).toFixed(1)}</strong> ${mult === 1 ? "" : "pts"}`;
+  $("result-summary").innerHTML = t("summary", {
+    pop: fmt(r.population),
+    bar: emojiBar(r.score),
+    score: (mult === 1 ? r.score : r.points).toFixed(1),
+    unit: mult === 1 ? "" : t("ptsUnit"),
+  });
   $("result-points").innerHTML =
-    mult === 1 ? "" : `×${mult} = <strong>${r.points.toFixed(1)}</strong> pts`;
+    mult === 1 ? "" : t("points", { mult, points: r.points.toFixed(1) });
   $("result-verdict").textContent = verdict(r);
   updateRing();
   setCenters([{ kind: "mine", at: center }]);
@@ -431,9 +441,9 @@ function setAnswerLine(state: "searching" | "found" | "error" | "hide", html = "
   const el = $("answer-line");
   el.hidden = state === "hide";
   el.classList.toggle("searching", state === "searching");
-  if (state === "searching") el.textContent = "Finding the closest correct ring…";
-  else if (state === "found") el.innerHTML = html || "You found a correct ring yourself!";
-  else if (state === "error") el.textContent = "Couldn't search for the closest correct ring.";
+  if (state === "searching") el.textContent = t("searching");
+  else if (state === "found") el.innerHTML = html || t("foundSelf");
+  else if (state === "error") el.textContent = t("searchError");
 }
 
 /** Fill `el` with "📍 Town, Country" for a point (coordinates until the name arrives). */
@@ -450,17 +460,18 @@ function showPlace(el: HTMLElement, at: LngLat, myAttempt: number, prefix = "�
 function showAnswer(r: Result, res: AnswerResult, animate: boolean) {
   const a = res.answer ?? res.best;
   if (!a) {
-    setAnswerLine("found", `No ring within ${fmt(res.searchedKm)} km comes close to this target.`);
+    setAnswerLine("found", t("noneClose", { km: fmt(res.searchedKm) }));
     return;
   }
-  const where = `${fmt(a.distanceKm)} km away`;
+  const where = t("away", { km: fmt(a.distanceKm) });
   setAnswerLine(
     "found",
     res.answer
-      ? `Closest correct ring: <strong>${fmt(a.population)}</strong> people, ${where}.<span class="place" id="answer-place"></span>`
-      : `No ring within ${fmt(res.searchedKm)} km hits the target. Best nearby: <strong>${fmt(a.population)}</strong> (${a.accuracy.toFixed(1)}%), ${where}.<span class="place" id="answer-place"></span>`,
+      ? t("closest", { pop: fmt(a.population), where }) + `<span class="place" id="answer-place"></span>`
+      : t("noHit", { km: fmt(res.searchedKm), pop: fmt(a.population), acc: a.accuracy.toFixed(1), where }) +
+          `<span class="place" id="answer-place"></span>`,
   );
-  showPlace($("answer-place"), a.center, attempt, "Centred near ");
+  showPlace($("answer-place"), a.center, attempt, t("centredNear"));
   setData("answer", circleFeature(a.center, puzzle.radiusKm));
   setCenters([
     { kind: "mine", at: { lng: r.lng, lat: r.lat } },
@@ -503,7 +514,7 @@ function resetPlay() {
   lastBounds = null;
   $("crosshair").classList.remove("hidden");
   lockBtn.disabled = false;
-  lockBtn.textContent = "Lock in ring";
+  lockBtn.textContent = t("lockIn");
   setData("answer", EMPTY);
   setAnswerLine("hide");
   setCenters([]);
@@ -511,7 +522,7 @@ function resetPlay() {
   difficultyLocked = false;
   if (difficulty !== "hard") {
     difficulty = "hard";
-    applyMapStyle(map, difficulty);
+    applyMapStyle(map, difficulty, LANG);
   }
   renderDifficulty();
   updateRing();
@@ -528,22 +539,30 @@ $("new-btn").addEventListener("click", () => {
 // ---- sharing ----
 $("share-btn").addEventListener("click", async () => {
   if (!locked) return;
-  const text = shareText(puzzle, locked, location.origin + location.pathname);
+  const text = shareText(
+    puzzle,
+    locked,
+    location.origin + location.pathname,
+    (v) => t("shareTitle", v),
+    DIFFICULTIES[locked.difficulty].label,
+    t("ptsUnit"),
+  );
   try {
     if (navigator.share && matchMedia("(pointer: coarse)").matches) {
       await navigator.share({ text });
       return;
     }
     await navigator.clipboard.writeText(text);
-    toast("Result copied to clipboard");
+    toast(t("copied"));
   } catch (e) {
-    if ((e as Error).name !== "AbortError") toast("Couldn't share. Try again.");
+    if ((e as Error).name !== "AbortError") toast(t("shareFailed"));
   }
 });
 
 // ---- help ----
 const helpDialog = $<HTMLDialogElement>("help-dialog");
 $("help-btn").addEventListener("click", () => helpDialog.showModal());
+$("lang-btn").addEventListener("click", switchLanguage);
 $("help-close").addEventListener("click", () => helpDialog.close());
 try {
   if (!localStorage.getItem("mapringer:seen-help")) {

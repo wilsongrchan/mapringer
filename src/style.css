@@ -849,3 +849,12 @@ dialog {
   stroke-width: 3;
   stroke-linejoin: round;
 }
+
+.top-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.lang-btn {
+  font-size: 14px;
+}

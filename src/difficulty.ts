@@ -1,11 +1,12 @@
 import type * as maplibregl from "maplibre-gl";
+import { t, type Lang } from "./i18n";
 
 export type Difficulty = "easy" | "standard" | "hard";
 
 export const DIFFICULTIES: Record<Difficulty, { label: string; multiplier: number; blurb: string }> = {
-  easy: { label: "Easy", multiplier: 0.8, blurb: "Satellite with labels and borders" },
-  standard: { label: "Standard", multiplier: 1, blurb: "Light map with labels, no roads" },
-  hard: { label: "Hard", multiplier: 1.2, blurb: "Land, lakes and rivers only" },
+  easy: { label: t("diffEasy"), multiplier: 0.8, blurb: t("blurbEasy") },
+  standard: { label: t("diffStandard"), multiplier: 1, blurb: t("blurbStandard") },
+  hard: { label: t("diffHard"), multiplier: 1.2, blurb: t("blurbHard") },
 };
 
 export const DIFFICULTY_ORDER: Difficulty[] = ["easy", "standard", "hard"];
@@ -71,10 +72,32 @@ function blank(style: StyleSpec): StyleSpec {
   return { ...style, layers: style.layers.filter(keep) };
 }
 
-export function applyMapStyle(map: maplibregl.Map, d: Difficulty): void {
+/**
+ * Chinese map labels: prefer Traditional Chinese names, then Chinese, then
+ * the local name. (OpenMapTiles carries name:zh-Hant / name:zh where OSM has them.)
+ */
+const LABEL_LAYERS = new Set(["place", "water_name", "waterway"]);
+function chineseLabels(style: StyleSpec): StyleSpec {
+  return {
+    ...style,
+    layers: style.layers.map((l): LayerSpec => {
+      if (l.type !== "symbol" || !LABEL_LAYERS.has(srcLayer(l) ?? "")) return l;
+      return {
+        ...l,
+        layout: {
+          ...l.layout,
+          "text-field": ["coalesce", ["get", "name:zh-Hant"], ["get", "name:zh"], ["get", "name"]],
+        },
+      };
+    }),
+  };
+}
+
+export function applyMapStyle(map: maplibregl.Map, d: Difficulty, lang: Lang = "en"): void {
   const url = d === "easy" ? `${OFM}/liberty` : `${OFM}/positron`;
   const transform = d === "easy" ? satellite : d === "hard" ? blank : noRoads;
-  map.setStyle(url, { diff: false, transformStyle: (_prev, next) => transform(next) });
+  const localise = lang === "zh" ? chineseLabels : (s: StyleSpec) => s;
+  map.setStyle(url, { diff: false, transformStyle: (_prev, next) => localise(transform(next)) });
 }
 
 export function loadDifficulty(): Difficulty {

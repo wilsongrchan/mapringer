@@ -15,16 +15,18 @@
     <header class="topbar">
       <div class="brand">
         <svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="11" /></svg>
-        <span>MapRinger</span>
+        <span data-i18n="appName">MapRinger</span>
         <span class="num" id="puzzle-num"></span>
       </div>
-      <button class="icon-btn" id="help-btn" aria-label="How to play">?</button>
+      <div class="top-actions">
+        <button class="icon-btn lang-btn" id="lang-btn" data-i18n="langButton" data-i18n-label="langButtonLabel">中</button>
+        <button class="icon-btn" id="help-btn" data-i18n-label="helpLabel" aria-label="How to play">?</button>
+      </div>
     </header>
 
     <section class="challenge card" id="challenge">
       <div class="label" id="challenge-label">Today's ring</div>
       <div class="challenge-line" id="challenge-line">
-        Fit <strong id="target"></strong> people in <strong id="radius"></strong>
       </div>
     </section>
 
@@ -33,13 +35,13 @@
     <footer class="bottom">
       <div class="card play" id="play-panel">
         <div class="difficulty" id="difficulty" role="group" aria-label="Map difficulty">
-          <button data-d="easy">Easy</button>
-          <button data-d="standard">Standard</button>
-          <button data-d="hard">Hard</button>
+          <button data-d="easy" data-i18n="diffEasy">Easy</button>
+          <button data-d="standard" data-i18n="diffStandard">Standard</button>
+          <button data-d="hard" data-i18n="diffHard">Hard</button>
         </div>
         <p class="difficulty-info" id="difficulty-info"></p>
-        <p class="hint" id="play-hint">Pan and zoom the map to move the ring. You get one try per day.</p>
-        <button class="primary" id="lock-btn">Lock in ring</button>
+        <p class="hint" id="play-hint" data-i18n="playHint">Pan and zoom the map to move the ring. You get one try per day.</p>
+        <button class="primary" id="lock-btn" data-i18n="lockIn">Lock in ring</button>
       </div>
 
       <div class="card result" id="result-panel" hidden>
@@ -47,17 +49,17 @@
           <span class="grab" aria-hidden="true"></span>
           <span class="result-summary" id="result-summary"></span>
           <span class="chev" aria-hidden="true"></span>
-          <span class="sr-only" id="result-toggle-label">Hide results</span>
+          <span class="sr-only" id="result-toggle-label" data-i18n="hideResults">Hide results</span>
         </button>
         <div class="result-details" id="result-details">
         <div class="result-grid">
           <div>
-            <div class="label">Your ring</div>
+            <div class="label" data-i18n="yourRing">Your ring</div>
             <div class="big" id="result-pop">…</div>
             <div class="place" id="result-place"></div>
           </div>
           <div>
-            <div class="label">Target</div>
+            <div class="label" data-i18n="target">Target</div>
             <div class="big muted" id="result-target"></div>
           </div>
         </div>
@@ -77,19 +79,19 @@
         <p class="verdict" id="result-verdict"></p>
         <p class="answer-line" id="answer-line" hidden></p>
         <div class="actions">
-          <button class="primary" id="share-btn">Share result</button>
-          <div class="next" id="next-info">Next ring in <span id="countdown"></span></div>
+          <button class="primary" id="share-btn" data-i18n="shareResult">Share result</button>
+          <div class="next" id="next-info"><span data-i18n="nextRingIn">Next ring in</span> <span id="countdown"></span></div>
         </div>
         <div class="actions test-actions" id="test-actions" hidden>
-          <button id="again-btn">Try again</button>
-          <button class="primary" id="new-btn">New puzzle</button>
+          <button id="again-btn" data-i18n="tryAgain">Try again</button>
+          <button class="primary" id="new-btn" data-i18n="newPuzzle">New puzzle</button>
         </div>
         </div>
       </div>
     </footer>
 
     <dialog id="help-dialog" class="card">
-      <h2>How to play</h2>
+      <h2 data-i18n="howToPlay">How to play</h2>
 
       <div class="demo" aria-hidden="true">
         <svg viewBox="0 0 300 160" class="demo-map">
@@ -112,40 +114,27 @@
           </g>
         </svg>
         <div class="demo-ui">
-          <span class="demo-btn">Lock in ring</span>
-          <span class="demo-result"><strong>49,800</strong> people · target 51,000 · <strong>100</strong> 🎯</span>
+          <span class="demo-btn" data-i18n="lockIn">Lock in ring</span>
+          <span class="demo-result" data-i18n-html="demoResult"><strong>49,800</strong> people · target 51,000 · <strong>100</strong> 🎯</span>
         </div>
       </div>
 
       <ol class="demo-steps">
-        <li class="s1">Each day: one ring size, one target population.</li>
-        <li class="s2">Pan the map to move the ring over a place you think fits.</li>
-        <li class="s3">Lock it in. You get <strong>one</strong> try, then see the real count and the closest ring that would have hit it.</li>
+        <li class="s1" data-i18n-html="step1">Each day: one ring size, one target population.</li>
+        <li class="s2" data-i18n-html="step2">Pan the map to move the ring over a place you think fits.</li>
+        <li class="s3" data-i18n-html="step3">Lock it in. You get <strong>one</strong> try, then see the real count and the closest ring that would have hit it.</li>
       </ol>
 
-      <p class="small">
-        <strong>Maps:</strong> Hard (land, lakes, rivers) ×1.2 · Standard (no roads) ×1 · Easy (satellite) ×0.8.
-        You start on Hard and can only switch to an easier map.
-      </p>
-      <p class="small">
-        <strong>Scoring</strong> (out of 100): within 5% of the target is a perfect 100. After that it drops on a log scale:
-        2× too many (or too few) scores about 70, 10× off about 27.
-      </p>
+      <p class="small" data-i18n-html="helpMaps"></p>
+      <p class="small" data-i18n-html="helpScoring"></p>
 
       <details class="credits">
-        <summary>Credits &amp; licences</summary>
-        <p class="small">
-          Population: <a href="https://human-settlement.emergency.copernicus.eu/ghs_pop2023.php" target="_blank" rel="noopener">GHSL GHS-POP R2023A</a>
-          (2025 estimate, 1 km grid), European Commission JRC, CC BY 4.0.
-          Map: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © OpenMapTiles © OpenStreetMap contributors.
-          Satellite imagery © Esri, Maxar, Earthstar Geographics.
-          Place names: <a href="https://nominatim.org" target="_blank" rel="noopener">Nominatim</a> / OpenStreetMap.
-          Inspired by Tom Forth's <a href="https://tomforth.co.uk/circlepopulations/" target="_blank" rel="noopener">circle populations</a>.
-        </p>
+        <summary data-i18n-html="credits">Credits &amp; licences</summary>
+        <p class="small" data-i18n-html="creditsBody"></p>
       </details>
 
       <div class="dialog-actions">
-        <button class="primary" id="help-close" autofocus>Got it</button>
+        <button class="primary" id="help-close" autofocus data-i18n="gotIt">Got it</button>
       </div>
     </dialog>
 

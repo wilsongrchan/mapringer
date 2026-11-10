@@ -146,12 +146,15 @@ export function shareText(
   p: Puzzle,
   r: { population: number; score: number; points: number; difficulty: string },
   url: string,
+  title: (v: { n: number; radius: string; level: string }) => string,
+  difficultyLabel: string,
+  ptsUnit: string,
 ): string {
-  const level = r.difficulty === "standard" ? "" : ` · ${r.difficulty[0].toUpperCase()}${r.difficulty.slice(1)}`;
+  const level = r.difficulty === "standard" ? "" : ` · ${difficultyLabel}`;
   return [
-    `MapRinger #${p.number} · ${fmt(p.radiusKm)} km ring${level}`,
+    title({ n: p.number, radius: fmt(p.radiusKm), level }),
     `🎯 ${fmt(p.target)} → ${fmt(r.population)}`,
-    `${emojiBar(r.score)} ${r.points.toFixed(1)} pts`,
+    `${emojiBar(r.score)} ${r.points.toFixed(1)} ${ptsUnit}`,
     url,
   ].join("\n");
 }
