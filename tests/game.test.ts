@@ -286,6 +286,24 @@ describe.skipIf(!existsSync(LAND))("side quests on the real land mask", async ()
     expect(done({ kind: "continent", continent: "southAmerica", bonus: 5 })).toBe(true);
   });
 
+  it("line quests: hemispheres and tropics, judged on the whole ring", async () => {
+    const at = (lat: number, lng: number, r: number) => (kind: "west" | "east" | "northOfCancer" | "southOfCapricorn" | "tropics") =>
+      questDone({ kind, bonus: 5 }, { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, continents: new Set() }, { lat, lng }, r);
+    // London straddles the prime meridian with a big ring, but not a tiny one west of it
+    expect(at(51.5, -0.13, 50)("west")).toBe(false);
+    expect(at(51.5, -0.5, 10)("west")).toBe(true);
+    expect(at(51.5, -0.5, 10)("east")).toBe(false);
+    // across the 180° meridian (Fiji) is in neither hemisphere
+    expect(at(-17, 179.9, 50)("east")).toBe(false);
+    expect(at(-17, 178, 50)("east")).toBe(true);
+    // tropics
+    expect(at(30, 0, 50)("northOfCancer")).toBe(true);
+    expect(at(23.6, 0, 50)("northOfCancer")).toBe(false); // ring dips south of 23.44°N
+    expect(at(-34, 151, 20)("southOfCapricorn")).toBe(true);
+    expect(at(0, 30, 100)("tropics")).toBe(true);
+    expect(at(23, 30, 100)("tropics")).toBe(false);
+  });
+
   it("open ocean centre counts as no continent", async () => {
     const done = await check({ lat: -20, lng: -140 }, 50);
     expect(done({ kind: "continent", continent: "oceania", bonus: 5 })).toBe(false);
@@ -293,7 +311,11 @@ describe.skipIf(!existsSync(LAND))("side quests on the real land mask", async ()
 
   it("picks every quest kind over time, and only pays out with a decent score", () => {
     const kinds = new Set(Array.from({ length: 300 }, (_, i) => questFor(puzzleFor(i + 1)).kind));
-    expect([...kinds].sort()).toEqual(["continent", "equator", "islandsOnly", "landlocked", "twoContinents"]);
+    expect([...kinds].sort()).toEqual([
+      "continent", "east", "equator", "islandsOnly", "landlocked", "northOfCancer", "southOfCapricorn", "tropics", "twoContinents", "west",
+    ]);
+    // puzzle #1 was played before the line quests were added; it keeps its quest
+    expect(questFor(puzzleFor(1))).toEqual({ kind: "continent", continent: "oceania", bonus: 5 });
     const q = { kind: "landlocked" as const, bonus: 5 };
     expect(questBonus(q, true, 60)).toBe(5);
     expect(questBonus(q, true, 10)).toBe(0);

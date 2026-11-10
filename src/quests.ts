@@ -12,7 +12,13 @@ export type Quest =
   | { kind: "landlocked"; bonus: number }
   | { kind: "islandsOnly"; bonus: number }
   | { kind: "twoContinents"; bonus: number }
-  | { kind: "equator"; bonus: number };
+  | { kind: "equator"; bonus: number }
+  | { kind: "west" | "east" | "northOfCancer" | "southOfCapricorn" | "tropics"; bonus: number };
+
+/** Latitude of the tropics (Cancer north, Capricorn south). */
+export const TROPIC_LAT = 23.436;
+/** Quests added after launch only appear from this puzzle on, so earlier days keep theirs. */
+export const LINE_QUESTS_FROM = 2;
 
 const CONTINENT_CODES: Record<number, Continent> = {
   1: "africa",
@@ -50,6 +56,15 @@ export function questFor(p: Puzzle): Quest {
   ];
   // A ring needs to be big enough to reach the equator from a populated place.
   if (p.radiusKm >= 25 && p.twist !== "packed-tiny") pool.push({ kind: "equator", bonus: 5 });
+  // whole-ring-on-one-side-of-a-line quests (always possible for a populated ring)
+  if (p.number >= LINE_QUESTS_FROM)
+    pool.push(
+      { kind: "west", bonus: 5 },
+      { kind: "east", bonus: 5 },
+      { kind: "northOfCancer", bonus: 5 },
+      { kind: "southOfCapricorn", bonus: 10 },
+      { kind: "tropics", bonus: 5 },
+    );
   return pool[Math.floor(rand() * pool.length)];
 }
 
@@ -113,6 +128,23 @@ export function questDone(q: Quest, s: RingSurface, center: LngLat, radiusKm: nu
     case "equator": {
       const latR = radiusKm / KM_PER_DEG;
       return center.lat - latR < 0 && center.lat + latR > 0;
+    }
+    case "northOfCancer":
+      return center.lat - radiusKm / KM_PER_DEG > TROPIC_LAT;
+    case "southOfCapricorn":
+      return center.lat + radiusKm / KM_PER_DEG < -TROPIC_LAT;
+    case "tropics": {
+      const latR = radiusKm / KM_PER_DEG;
+      return center.lat - latR > -TROPIC_LAT && center.lat + latR < TROPIC_LAT;
+    }
+    case "west":
+    case "east": {
+      // the ring's east-west reach in degrees of longitude at its widest latitude
+      const latR = radiusKm / KM_PER_DEG;
+      const widest = Math.min(89.9, Math.abs(center.lat) + latR);
+      const lngR = radiusKm / (KM_PER_DEG * Math.cos((widest * Math.PI) / 180));
+      const lng = ((((center.lng + 180) % 360) + 360) % 360) - 180;
+      return q.kind === "west" ? lng - lngR >= -180 && lng + lngR <= 0 : lng - lngR >= 0 && lng + lngR <= 180;
     }
   }
 }

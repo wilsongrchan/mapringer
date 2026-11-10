@@ -9,7 +9,7 @@ import { findClosestAnswer, MATCH_ACCURACY, type AnswerResult } from "./answer";
 import { applyMapStyle, applyRevealStyle, DIFFICULTIES, DIFFICULTY_ORDER, GLOBE, prefetchStyles, type Difficulty, type GameLayers } from "./difficulty";
 import { circleRing, type LngLat } from "./geo";
 import { coords, placeName } from "./places";
-import { BONUS_MIN_SCORE, questBonus, questDone, questFor, surveyRing, type Quest } from "./quests";
+import { BONUS_MIN_SCORE, questBonus, questDone, questFor, surveyRing, TROPIC_LAT, type Quest } from "./quests";
 import { populationInRing, preloadPopulation, readBlock, readLandBlock } from "./population";
 import { accuracy, emojiBar, ratioForScore, SCORE_BANDS, fmt, msUntilNextPuzzle, puzzleFor, score, shareText, todaysPuzzle, type Puzzle } from "./puzzle";
 import { loadResult, saveResult, type Result } from "./storage";
@@ -90,8 +90,20 @@ const fitChallenge = () => fitOneLine($("challenge-line"), matchMedia("(min-widt
 
 let quest: Quest = questFor(puzzle);
 
+const QUEST_TEXT = {
+  equator: "questEquator",
+  landlocked: "questLandlocked",
+  islandsOnly: "questIslands",
+  twoContinents: "questTwoContinents",
+  west: "questWest",
+  east: "questEast",
+  northOfCancer: "questNorthOfCancer",
+  southOfCapricorn: "questSouthOfCapricorn",
+  tropics: "questTropics",
+} as const;
+
 function questText(q: Quest): string {
-  return q.kind === "continent" ? t("questContinent", { continent: t(q.continent) }) : t(q.kind === "equator" ? "questEquator" : q.kind === "landlocked" ? "questLandlocked" : q.kind === "islandsOnly" ? "questIslands" : "questTwoContinents");
+  return q.kind === "continent" ? t("questContinent", { continent: t(q.continent) }) : t(QUEST_TEXT[q.kind]);
 }
 
 /**
@@ -101,19 +113,32 @@ function questText(q: Quest): string {
  */
 const showHints = () => difficulty !== "hard" || !!locked;
 
-/** Map lines that go with the day's quest (just the equator, for now). */
+/** A labelled line all the way round the globe: a parallel (lat) or a meridian (lng). */
+function parallel(lat: number, name: string) {
+  return { type: "Feature" as const, properties: { name }, geometry: { type: "LineString" as const, coordinates: [[-180, lat], [0, lat], [180, lat]] } };
+}
+function meridian(lng: number, name: string) {
+  const coordinates: number[][] = [];
+  for (let lat = -85; lat <= 85; lat += 5) coordinates.push([lng, lat]);
+  return { type: "Feature" as const, properties: { name }, geometry: { type: "LineString" as const, coordinates } };
+}
+
+/** Map lines that go with the day's quest (equator, tropics, meridians). */
 function questLines() {
-  const features =
-    showHints() && quest.kind === "equator"
-      ? [
-          {
-            type: "Feature" as const,
-            properties: { name: t("equator") },
-            geometry: { type: "LineString" as const, coordinates: [[-180, 0], [0, 0], [180, 0]] },
-          },
-        ]
-      : [];
-  return { type: "FeatureCollection" as const, features };
+  const lines = !showHints()
+    ? []
+    : quest.kind === "equator"
+      ? [parallel(0, t("equator"))]
+      : quest.kind === "northOfCancer"
+        ? [parallel(TROPIC_LAT, t("tropicCancer"))]
+        : quest.kind === "southOfCapricorn"
+          ? [parallel(-TROPIC_LAT, t("tropicCapricorn"))]
+          : quest.kind === "tropics"
+            ? [parallel(TROPIC_LAT, t("tropicCancer")), parallel(-TROPIC_LAT, t("tropicCapricorn"))]
+            : quest.kind === "west" || quest.kind === "east"
+              ? [meridian(0, t("primeMeridian")), meridian(180, t("antimeridian"))]
+              : [];
+  return { type: "FeatureCollection" as const, features: lines };
 }
 
 type AreaFC = { type: "FeatureCollection"; features: { type: "Feature"; properties: { continent: string; island: boolean }; geometry: object }[] };
