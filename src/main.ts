@@ -44,17 +44,38 @@ const params = new URLSearchParams(location.search);
 const dayParam = Number(params.get("day"));
 const UNLIMITED = params.has("unlimited") ? params.get("unlimited") !== "0" : import.meta.env.DEV;
 // Each day is three rings, easy to hard, played one after another.
-let day = dayParam > 0 ? dayParam : todaysNumber();
+/**
+ * Switching language reloads the page. Just before, the game stashes where you
+ * are (for this tab only) and picks it back up here: the map view always, and
+ * in test mode, where nothing else is saved, the day, ring and results too.
+ */
+interface CarryOver {
+  camera: { center: [number, number]; zoom: number };
+  test?: { day: number; practice: boolean; stage: Stage; results: (Result | null)[] };
+}
+const CARRY_KEY = "mapringer:carry-over";
+const carried: CarryOver | null = (() => {
+  try {
+    const raw = sessionStorage.getItem(CARRY_KEY);
+    sessionStorage.removeItem(CARRY_KEY);
+    return raw ? (JSON.parse(raw) as CarryOver) : null;
+  } catch {
+    return null;
+  }
+})();
+const carriedTest = UNLIMITED ? carried?.test : undefined;
+
+let day = carriedTest?.day ?? (dayParam > 0 ? dayParam : todaysNumber());
 let rings = dayRings(day);
-let results: (Result | null)[] = ([0, 1, 2] as Stage[]).map((st) => (UNLIMITED ? null : loadResult(day, st)));
+let results: (Result | null)[] = carriedTest?.results ?? ([0, 1, 2] as Stage[]).map((st) => (UNLIMITED ? null : loadResult(day, st)));
 /** The first ring not played yet (or the last ring once the day is done). */
 function nextStage(): Stage {
   const i = results.findIndex((r) => !r);
   return (i < 0 ? 2 : i) as Stage;
 }
-let stage: Stage = nextStage();
+let stage: Stage = carriedTest?.stage ?? nextStage();
 let puzzle: Puzzle = rings[stage];
-let practice = false; // true once we've moved on to random days
+let practice = carriedTest?.practice ?? false; // true once we've moved on to random days
 const dayDone = () => results.every(Boolean);
 
 const COLOR = { ring: "#e4572e", good: "#2a9d8f" };
@@ -93,8 +114,8 @@ function wholeGlobeZoom(): number {
 const map = new maplibregl.Map({
   container: "map",
   style: { version: 8, sources: {}, layers: [], projection: GLOBE },
-  center: [10, 25],
-  zoom: wholeGlobeZoom(),
+  center: carried?.camera.center ?? [10, 25],
+  zoom: carried?.camera.zoom ?? wholeGlobeZoom(),
   attributionControl: false, // added bottom-left below, clear of the lock-in button
   dragRotate: false,
   pitchWithRotate: false,
@@ -1032,7 +1053,17 @@ $("help-btn").addEventListener("click", () => helpDialog.showModal());
   new MutationObserver(() => (helpDialog.open ? start() : video.pause())).observe(helpDialog, { attributes: true, attributeFilter: ["open"] });
   if (helpDialog.open) start();
 }
-$("lang-btn").addEventListener("click", switchLanguage);
+$("lang-btn").addEventListener("click", () => {
+  const c = map.getCenter();
+  const keep: CarryOver = { camera: { center: [c.lng, c.lat], zoom: map.getZoom() } };
+  if (UNLIMITED) keep.test = { day, practice, stage, results };
+  try {
+    sessionStorage.setItem(CARRY_KEY, JSON.stringify(keep));
+  } catch {
+    /* storage unavailable: the switch still works, from a fresh start */
+  }
+  switchLanguage();
+});
 $("help-close").addEventListener("click", () => helpDialog.close());
 try {
   if (!localStorage.getItem("mapringer:seen-help")) {
