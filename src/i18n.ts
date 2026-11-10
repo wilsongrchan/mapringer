@@ -229,7 +229,7 @@ const zh: Record<Key, Entry> = {
   shareTitle: (v) => `圈地家 #${v.n} · 半徑 ${v.radius} 公里${v.level}`,
 
   howToPlay: "玩法",
-  demoResult: "<strong>4萬9800</strong> 人 · 目標 5萬1000 · <strong>100</strong> 🎯",
+  demoResult: "<strong>49,800</strong> 人 · 目標 51,000 · <strong>100</strong> 🎯",
   step1: "每天一題：一個圈的大小，一個目標人口。",
   step2: "拖動地圖，把圈移到你認為人數剛好的地方。",
   step3: "鎖定圈圈。你只有<strong>一次</strong>機會，之後會顯示真實人數，以及最近的正確圈。",
@@ -261,7 +261,10 @@ export function applyStaticText(): void {
     el.setAttribute("aria-label", t(el.dataset.i18nLabel as Key));
 }
 
-/** A people count in the current language (萬 / 億 grouping in Chinese). */
+/**
+ * A people count for the question panel (萬 / 億 grouping in Chinese, so the
+ * target is quick to read). Results use full digits (fmt) instead.
+ */
 export const people = (n: number) => formatPeople(n, LANG);
 
 /** Language for reverse geocoding place names. */

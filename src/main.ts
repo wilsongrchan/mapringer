@@ -470,9 +470,9 @@ function showResult(r: Result, animate: boolean) {
   revealMap(r);
   setCollapsed(false, false);
   $("crosshair").classList.add("hidden");
-  $("result-target").textContent = people(puzzle.target);
+  $("result-target").textContent = fmt(puzzle.target);
   // long numbers (e.g. 1,310,000,000) get a smaller size so the two columns fit
-  const longest = Math.max(people(r.population).length, people(puzzle.target).length);
+  const longest = Math.max(fmt(r.population).length, fmt(puzzle.target).length);
   for (const id of ["result-pop", "result-target"]) {
     $(id).classList.toggle("long", longest > 9);
     $(id).classList.toggle("very-long", longest > 11);
@@ -486,7 +486,7 @@ function showResult(r: Result, animate: boolean) {
   $("result-bar").textContent = emojiBar(r.score);
   $("result-acc").textContent = `${r.score.toFixed(1)}`;
   $("result-summary").innerHTML = t("summary", {
-    pop: people(r.population),
+    pop: fmt(r.population),
     bar: emojiBar(r.score),
     score: (plain ? r.score : r.points).toFixed(1),
     unit: plain ? "" : t("ptsUnit"),
@@ -528,13 +528,13 @@ function showResult(r: Result, animate: boolean) {
 
 function countUp(el: HTMLElement, value: number, ms: number) {
   if (ms <= 0) {
-    el.textContent = people(value);
+    el.textContent = fmt(value);
     return;
   }
   const start = performance.now();
   const step = (now: number) => {
     const t = Math.min(1, (now - start) / ms);
-    el.textContent = people(value * (1 - (1 - t) ** 3));
+    el.textContent = fmt(value * (1 - (1 - t) ** 3));
     if (t < 1) requestAnimationFrame(step);
   };
   requestAnimationFrame(step);
@@ -570,8 +570,8 @@ function showAnswer(r: Result, res: AnswerResult, animate: boolean) {
   setAnswerLine(
     "found",
     res.answer
-      ? t("closest", { pop: people(a.population), where }) + `<span class="place" id="answer-place"></span>`
-      : t("noHit", { km: fmt(res.searchedKm), pop: people(a.population), acc: a.accuracy.toFixed(1), where }) +
+      ? t("closest", { pop: fmt(a.population), where }) + `<span class="place" id="answer-place"></span>`
+      : t("noHit", { km: fmt(res.searchedKm), pop: fmt(a.population), acc: a.accuracy.toFixed(1), where }) +
           `<span class="place" id="answer-place"></span>`,
   );
   showPlace($("answer-place"), a.center, attempt, t("centredNear"));
@@ -651,7 +651,6 @@ $("share-btn").addEventListener("click", async () => {
     (v) => t("shareTitle", v),
     DIFFICULTIES[locked.difficulty].label,
     `${t("ptsUnit")}${locked.bonus ? " ★" : ""}`,
-    people,
   );
   try {
     if (navigator.share && matchMedia("(pointer: coarse)").matches) {
