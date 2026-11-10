@@ -349,12 +349,10 @@ dialog ol {
   color: var(--muted);
 }
 
-.test-actions {
-  margin-top: 8px;
-}
-
-.test-actions button {
+/* test mode: Share, Try again and New puzzle share one row */
+.actions button {
   flex: 1;
+  white-space: nowrap;
 }
 
 /* ---- off-by gauge ---- */
@@ -513,8 +511,12 @@ dialog ol {
   color: var(--muted);
 }
 
+.points strong,
+.acc.final {
+  color: var(--accent);
+}
+
 .points strong {
-  color: var(--fg);
   font-size: 20px;
 }
 
@@ -1069,4 +1071,96 @@ dialog.confirm .small {
 
 dialog.confirm .dialog-actions button {
   flex: 1;
+}
+
+/* ---- phones: a more compact results panel ---- */
+@media (max-width: 799px) {
+  .result {
+    padding: 12px 14px;
+  }
+
+  .result-toggle {
+    width: calc(100% + 28px);
+    margin: -12px -14px 2px;
+    padding: 8px 14px 4px;
+  }
+
+  .result .label {
+    font-size: 11px;
+  }
+
+  .result-grid {
+    gap: 8px;
+  }
+
+  .big {
+    font-size: 18px;
+  }
+
+  .big.long {
+    font-size: 16px;
+  }
+
+  .big.very-long {
+    font-size: 14px;
+  }
+
+  .place {
+    font-size: 12px;
+  }
+
+  .score-row {
+    margin-top: 6px;
+    font-size: 15px;
+    gap: 8px;
+  }
+
+  .points {
+    font-size: 13px;
+  }
+
+  .points strong {
+    font-size: 16px;
+  }
+
+  .gauge {
+    margin-top: 8px;
+  }
+
+  .gauge-labels {
+    height: 14px;
+    margin-top: 4px;
+    font-size: 10px;
+  }
+
+  .gauge-caption {
+    font-size: 13px;
+  }
+
+  .verdict {
+    margin: 2px 0 8px;
+    font-size: 13px;
+  }
+
+  .answer-line,
+  .quest-result {
+    font-size: 13px;
+  }
+
+  .answer-line {
+    margin: -2px 0 10px;
+  }
+
+  .actions {
+    gap: 8px;
+  }
+
+  .actions button {
+    padding: 10px 8px;
+    font-size: 14px;
+  }
+
+  .next {
+    font-size: 12px;
+  }
 }

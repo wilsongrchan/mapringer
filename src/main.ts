@@ -67,6 +67,9 @@ const map = new maplibregl.Map({
   attributionControl: { compact: true },
   dragRotate: false,
   pitchWithRotate: false,
+  // play map motion (the globe's spin glide, short camera moves) even with
+  // Reduce Motion on: it's how the game is played, and iPhones often have it on
+  reduceMotion: false,
 });
 // a longer, softer glide after a flick, so spinning the globe feels smooth
 map.dragPan.enable({ linearity: 0.22, deceleration: 1300, maxSpeed: 2400, easing: (t) => 1 - (1 - t) ** 3 });
@@ -228,7 +231,8 @@ document.fonts?.ready.then(fitChallenge);
 
 if (UNLIMITED) {
   $("play-hint").textContent = t("testHint");
-  $("test-actions").hidden = false;
+  $("again-btn").hidden = false;
+  $("new-btn").hidden = false;
   $("next-info").hidden = true;
 }
 
@@ -765,6 +769,8 @@ function showResult(r: Result, animate: boolean) {
   const plain = mult === 1 && bonus === 0; // points equal the score
   $("result-bar").textContent = emojiBar(r.score);
   $("result-acc").textContent = `${r.score.toFixed(1)}`;
+  // the final number is orange: the score itself, or the total after multiplier / bonus
+  $("result-acc").classList.toggle("final", plain);
   $("result-summary").innerHTML = t("summary", {
     pop: fmt(r.population),
     bar: emojiBar(r.score),
@@ -849,14 +855,15 @@ function showAnswer(r: Result, res: AnswerResult, animate: boolean) {
     return;
   }
   const where = t("away", { km: fmt(a.distanceKm) });
+  // "Closest ring: 4 km away, in Hong Kong." (the place name fills in when the lookup returns)
+  const place = `<span id="answer-place"></span>${t("endStop")}`;
   setAnswerLine(
     "found",
     res.answer
-      ? t("closest", { pop: fmt(a.population), where }) + `<span class="place" id="answer-place"></span>`
-      : t("noHit", { km: fmt(res.searchedKm), pop: fmt(a.population), acc: a.accuracy.toFixed(1), where }) +
-          `<span class="place" id="answer-place"></span>`,
+      ? t("closest", { km: fmt(a.distanceKm) }) + place
+      : t("noHit", { km: fmt(res.searchedKm), pop: fmt(a.population), acc: a.accuracy.toFixed(1), where }) + place,
   );
-  showPlace($("answer-place"), a.center, attempt, t("centredNear"));
+  showPlace($("answer-place"), a.center, attempt, "");
   setData("answer", circleFeature(a.center, puzzle.radiusKm));
   setCenters([
     { kind: "mine", at: { lng: r.lng, lat: r.lat } },
