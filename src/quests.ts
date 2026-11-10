@@ -18,6 +18,7 @@ export type Quest =
   | { kind: "continent"; continent: Continent }
   | { kind: "country"; country: string }
   | { kind: "nearCity"; city: string; km: number }
+  | { kind: "high"; m: number }
   | { kind: "landlocked" }
   | { kind: "islandsOnly" }
   | { kind: "twoContinents" }
@@ -26,6 +27,10 @@ export type Quest =
 
 /** "Keep your ring's centre within this many km of <city>". */
 export const NEAR_CITY_KM = 200;
+
+/** "Make your ring reach ground above N m": ring 2 asks for 1,000 m, ring 3 for 2,000 m. */
+export const HIGH_EASY_M = 1000;
+export const HIGH_HARD_M = 2000;
 
 /** Latitude of the tropics (Cancer north, Capricorn south). */
 export const TROPIC_LAT = 23.436;
@@ -74,15 +79,17 @@ export function questFor(p: Puzzle): Quest | null {
       { kind: "east" },
       { kind: "northOfCancer" },
       { kind: "tropics" },
+      { kind: "high", m: HIGH_EASY_M },
     ]);
   }
   if (p.twist === "packed-tiny") return { kind: "nearCity", city: city(true), km: NEAR_CITY_KM };
-  if (p.twist === "empty-giant") return pick<Quest>([{ kind: "islandsOnly" }, { kind: "southOfCapricorn" }, { kind: "equator" }]);
+  if (p.twist === "empty-giant") return pick<Quest>([{ kind: "islandsOnly" }, { kind: "southOfCapricorn" }, { kind: "equator" }, { kind: "high", m: HIGH_HARD_M }]);
   const pool: Quest[] = [
     { kind: "nearCity", city: city(false), km: NEAR_CITY_KM },
     { kind: "country", country },
     { kind: "twoContinents" },
     { kind: "southOfCapricorn" },
+    { kind: "high", m: HIGH_HARD_M },
   ];
   // only small rings can sit on islands alone; the equator needs some reach from a city
   if (p.radiusKm <= 50) pool.push({ kind: "islandsOnly" });
@@ -168,9 +175,15 @@ export function countryAt(block: Block, center: LngLat): string | null {
   return best ? (COUNTRIES[best - 1]?.id ?? null) : null;
 }
 
-/** `country` is the ring's centre country (countryAt), needed only for country quests. */
-export function questDone(q: Quest, s: RingSurface, center: LngLat, radiusKm: number, country: string | null = null): boolean {
+/**
+ * `country` is the ring's centre country (countryAt), needed only for country
+ * quests; `highest` the highest ground in the ring in metres (highestInRing),
+ * only for height quests.
+ */
+export function questDone(q: Quest, s: RingSurface, center: LngLat, radiusKm: number, country: string | null = null, highest: number | null = null): boolean {
   switch (q.kind) {
+    case "high":
+      return highest !== null && highest > q.m;
     case "nearCity": {
       const c = CITIES.find((c) => c.id === q.city);
       return !!c && haversineKm(center, c) <= q.km;

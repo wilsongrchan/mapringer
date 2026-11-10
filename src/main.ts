@@ -10,6 +10,7 @@ import { applyMapStyle, applyRevealStyle, DIFFICULTIES, GLOBE, prefetchStyles, t
 import { circleRing, type LngLat } from "./geo";
 import { coords, placeName } from "./places";
 import { CITIES } from "./cities";
+import { highestInRing } from "./elevation";
 import { COUNTRIES, countryAt, questDone, questFor, surveyRing, TROPIC_LAT, type Quest } from "./quests";
 import { populationInRing, preloadPopulation, readBlock, readCountryBlock, readLandBlock } from "./population";
 import {
@@ -171,6 +172,7 @@ function questText(q: Quest): string {
   if (q.kind === "continent") return t("questContinent", { continent: t(q.continent) });
   if (q.kind === "country") return t("questCountry", { country: countryName(q.country) });
   if (q.kind === "nearCity") return t("questNearCity", { city: cityOf(q.city)?.[LANG] ?? q.city, km: q.km });
+  if (q.kind === "high") return t("questHigh", { m: fmt(q.m) });
   return t(QUEST_TEXT[q.kind]);
 }
 
@@ -472,6 +474,7 @@ lockBtn.addEventListener("click", async () => {
   buzz(25); // a little tap on phones that support it
   try {
     let seaShare: number | undefined;
+    let highest: number | null = null;
     const [population, done] = await Promise.all([
       populationInRing(center, puzzle.radiusKm),
       // the side quest is a bonus: if the land data can't load, it just doesn't count
@@ -479,11 +482,14 @@ lockBtn.addEventListener("click", async () => {
         readLandBlock(center, puzzle.radiusKm),
         // country quests only need the cells right around the centre
         quest?.kind === "country" ? readCountryBlock(center, 3).then((block) => countryAt(block, center)) : null,
+        // height quests: the highest ground in the ring, from the elevation tiles
+        quest?.kind === "high" ? highestInRing(center, puzzle.radiusKm) : null,
       ])
-        .then(([block, country]) => {
+        .then(([block, country, high]) => {
           const surface = surveyRing(block, center, puzzle.radiusKm);
           seaShare = surface.seaShare;
-          return quest ? questDone(quest, surface, center, puzzle.radiusKm, country) : false;
+          highest = high;
+          return quest ? questDone(quest, surface, center, puzzle.radiusKm, country, high) : false;
         })
         .catch(() => false),
     ]);
@@ -502,6 +508,7 @@ lockBtn.addEventListener("click", async () => {
       emoji: g.emoji,
       points: g.points,
       seaShare,
+      highest: highest ?? undefined,
     };
     if (!UNLIMITED) saveResult(result);
     results[stage] = result;
@@ -824,6 +831,7 @@ function showResult(r: Result, animate: boolean) {
   qr.hidden = r.questDone === undefined;
   qr.classList.toggle("done", !!r.questDone);
   qr.textContent = r.questDone ? t("questDoneLine") : t("questMissedLine", { pass: PASS_SCORE });
+  if (r.highest !== undefined) qr.textContent += t("highestLine", { m: fmt(r.highest) });
   renderDayEnd();
   updateRing();
   setCenters([{ kind: "mine", at: center }]);

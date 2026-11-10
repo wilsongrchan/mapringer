@@ -374,8 +374,8 @@ describe.skipIf(!existsSync(LAND))("side quests on the real land mask", async ()
   it("no quest on ring 1, easy quests on ring 2, hard ones on ring 3", () => {
     const kinds = (st: Stage) => new Set(Array.from({ length: 400 }, (_, i) => questFor(ringFor(i + 1, st))?.kind ?? "none"));
     expect([...kinds(0)]).toEqual(["none"]);
-    expect([...kinds(1)].sort()).toEqual(["continent", "east", "landlocked", "northOfCancer", "tropics", "west"]);
-    expect([...kinds(2)].sort()).toEqual(["country", "equator", "islandsOnly", "nearCity", "southOfCapricorn", "twoContinents"]);
+    expect([...kinds(1)].sort()).toEqual(["continent", "east", "high", "landlocked", "northOfCancer", "tropics", "west"]);
+    expect([...kinds(2)].sort()).toEqual(["country", "equator", "high", "islandsOnly", "nearCity", "southOfCapricorn", "twoContinents"]);
   });
 
   it("ring 3 quests suit the ring (tiny packed rings near megacities, no city quests for giant empty ones)", async () => {
@@ -387,8 +387,19 @@ describe.skipIf(!existsSync(LAND))("side quests on the real land mask", async ()
         expect(q.kind).toBe("nearCity");
         expect(CITIES.find((c) => c.id === (q as { city: string }).city)?.dense).toBe(true);
       }
-      if (p.twist === "empty-giant") expect(["islandsOnly", "southOfCapricorn", "equator"]).toContain(q.kind);
+      if (p.twist === "empty-giant") expect(["islandsOnly", "southOfCapricorn", "equator", "high"]).toContain(q.kind);
     }
+  });
+
+  it("height quests: 1,000 m on ring 2, 2,000 m on ring 3, judged on the ring's highest ground", () => {
+    const qs = (st: Stage) => Array.from({ length: 400 }, (_, i) => questFor(ringFor(i + 1, st))).filter((q) => q?.kind === "high");
+    expect(new Set(qs(1).map((q) => (q as { m: number }).m))).toEqual(new Set([1000]));
+    expect(new Set(qs(2).map((q) => (q as { m: number }).m))).toEqual(new Set([2000]));
+    const none = { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, seaShare: 0, continents: new Set<never>() };
+    const q = { kind: "high", m: 2000 } as const;
+    expect(questDone(q, none, { lat: 4.7, lng: -74.1 }, 10, null, 2640)).toBe(true);
+    expect(questDone(q, none, { lat: 4.7, lng: -74.1 }, 10, null, 1990)).toBe(false);
+    expect(questDone(q, none, { lat: 4.7, lng: -74.1 }, 10, null, null)).toBe(false); // no data: not done
   });
 
   it("near-city quests measure from the ring's centre", () => {
@@ -437,5 +448,22 @@ describe.skipIf(!existsSync(COUNTRY_TIF))("country quests on the real country ma
     expect(questDone(q, none, { lat: 48.85, lng: 2.35 }, 10, "FRA")).toBe(true);
     expect(questDone(q, none, { lat: 48.85, lng: 2.35 }, 10, "DEU")).toBe(false);
     expect(questDone(q, none, { lat: 48.85, lng: 2.35 }, 10, null)).toBe(false);
+  });
+});
+
+describe("elevation tiles", async () => {
+  const { terrariumHeight, tilesFor, zoomFor } = await import("../src/elevation");
+  it("decodes Terrarium pixels", () => {
+    expect(terrariumHeight(128, 0, 0)).toBe(0);
+    expect(terrariumHeight(135, 208, 0)).toBe(2000);
+    expect(terrariumHeight(127, 0, 0)).toBe(-256);
+  });
+  it("reads only a few tiles for any ring", () => {
+    for (const r of [3, 10, 25, 50, 100, 200, 300])
+      for (const lat of [0, 45, 70]) {
+        const n = tilesFor({ lat, lng: 179.9 }, r, zoomFor(r, lat)).length;
+        expect(n).toBeGreaterThan(0);
+        expect(n).toBeLessThanOrEqual(12);
+      }
   });
 });

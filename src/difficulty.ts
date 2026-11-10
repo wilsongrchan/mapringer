@@ -1,5 +1,4 @@
-import * as maplibregl from "maplibre-gl";
-import mlcontour from "maplibre-contour";
+import type * as maplibregl from "maplibre-gl";
 import { t, type Lang } from "./i18n";
 
 export type Difficulty = "easy" | "standard" | "hard";
@@ -70,67 +69,6 @@ function blank(style: StyleSpec): StyleSpec {
     (l.type === "fill" && srcLayer(l) === "water") ||
     (l.type === "line" && srcLayer(l) === "waterway");
   return { ...style, layers: style.layers.filter(keep) };
-}
-
-/**
- * Elevation contours on the Standard and Hard maps: a line every 500 m, a
- * bolder, labelled one every 1,000 m, on land only (no sea-depth lines).
- * Drawn in the browser from the free AWS / Mapzen Terrain Tiles.
- */
-const dem = new mlcontour.DemSource({
-  url: "https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png",
-  encoding: "terrarium",
-  maxzoom: 10,
-  worker: true,
-});
-dem.setupMaplibre(maplibregl);
-const CONTOUR_TILES = dem.contourProtocolUrl({ thresholds: { 0: [500, 1000] }, elevationKey: "ele", levelKey: "level", contourLayer: "contours" });
-
-function contours(style: StyleSpec): StyleSpec {
-  const onLand: maplibregl.FilterSpecification = [">", ["get", "ele"], 0];
-  return {
-    ...style,
-    sources: {
-      ...style.sources,
-      "mr-contours": {
-        type: "vector",
-        tiles: [CONTOUR_TILES],
-        maxzoom: 11,
-        attribution: "Elevation: Mapzen Terrain Tiles (SRTM, GMTED, ETOPO1)",
-      },
-    },
-    layers: [
-      ...style.layers,
-      {
-        id: "mr-contour-lines",
-        type: "line",
-        source: "mr-contours",
-        "source-layer": "contours",
-        filter: onLand,
-        paint: {
-          "line-color": "#9a7b55",
-          "line-opacity": ["match", ["get", "level"], 1, 0.6, 0.35],
-          "line-width": ["match", ["get", "level"], 1, 1.1, 0.6],
-        },
-      },
-      {
-        id: "mr-contour-labels",
-        type: "symbol",
-        source: "mr-contours",
-        "source-layer": "contours",
-        filter: ["all", onLand, [">", ["get", "level"], 0]],
-        minzoom: 4,
-        layout: {
-          "symbol-placement": "line",
-          "symbol-spacing": 400,
-          "text-size": 10,
-          "text-field": ["concat", ["number-format", ["get", "ele"], {}], " m"],
-          "text-font": ["Noto Sans Regular"],
-        },
-        paint: { "text-color": "#7a5c38", "text-halo-color": "rgba(255,255,255,0.85)", "text-halo-width": 1.2 },
-      },
-    ],
-  };
 }
 
 /**
@@ -222,6 +160,6 @@ export function applyRevealStyle(map: maplibregl.Map, lang: Lang, game: GameLaye
 
 export function applyMapStyle(map: maplibregl.Map, d: Difficulty, lang: Lang, game: GameLayers, diff = true): Promise<void> {
   const url = d === "easy" ? `${OFM}/liberty` : `${OFM}/positron`;
-  const transform = d === "easy" ? satellite : d === "hard" ? (s: StyleSpec) => contours(blank(s)) : (s: StyleSpec) => contours(noRoads(s));
+  const transform = d === "easy" ? satellite : d === "hard" ? blank : noRoads;
   return swapStyle(map, url, transform, lang, game, diff);
 }

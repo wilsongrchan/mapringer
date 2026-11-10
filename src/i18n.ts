@@ -65,8 +65,8 @@ const en = {
   diffStandard: "Standard",
   diffHard: "Hard",
   blurbEasy: "Satellite with labels and borders",
-  blurbStandard: "Light map with labels and height lines, no roads",
-  blurbHard: "Land, lakes, rivers and height lines only",
+  blurbStandard: "Light map with labels, no roads",
+  blurbHard: "Land, lakes and rivers only",
 
   yourRing: "Your ring",
   target: "Target",
@@ -96,6 +96,8 @@ const en = {
   questNorthOfCancer: "Keep your whole ring north of the Tropic of Cancer.",
   questSouthOfCapricorn: "Keep your whole ring south of the Tropic of Capricorn.",
   questTropics: "Keep your whole ring inside the tropics.",
+  questHigh: (v: Vars) => `Make your ring reach ground higher than ${v.m} m.`,
+  highestLine: (v: Vars) => ` (highest ground in your ring: ${v.m} m)`,
   questRule: (v: Vars) => `Skip it and the ring is pass / fail: a pass gets ${v.half} pts, a fail 0.`,
   questDoneLine: "★ Quest complete",
   questMissedLine: (v: Vars) => `Quest not done, so this ring is pass / fail`,
@@ -153,7 +155,7 @@ const en = {
   step3:
     "Lock it in. <strong>One</strong> try per ring, then see the real count and the closest ring that would have hit it.",
   helpMaps:
-    "<strong>Maps:</strong> ring 1 is on the satellite map (80 pts), ring 2 on a plain map (100 pts), ring 3 on a blank map (150 pts). Rings 2 and 3 show height lines every 500 m.",
+    "<strong>Maps:</strong> ring 1 is on the satellite map (80 pts), ring 2 on a plain map (100 pts), ring 3 on a blank map (150 pts).",
   helpScoring:
     "<strong>Scoring:</strong> the closer to the target, the more points (up to 80, 100 and 150). 🎯 within 15%, 🟠 within 2×, 🟡 within 5×, ⚪ further. Rings 2 and 3 have a quest: skip it and the ring is pass / fail, 🌙 for half points.",
   moreGamesLabel: "Game Rabbit: more games",
@@ -190,8 +192,8 @@ const zh: Record<Key, Entry> = {
   diffStandard: "標準",
   diffHard: "困難",
   blurbEasy: "衛星圖，有地名和邊界",
-  blurbStandard: "淺色地圖，有地名和等高線，沒有道路",
-  blurbHard: "只有陸地、湖泊、河流和等高線",
+  blurbStandard: "淺色地圖，有地名，沒有道路",
+  blurbHard: "只有陸地、湖泊和河流",
 
   yourRing: "你的圈",
   target: "目標",
@@ -221,6 +223,8 @@ const zh: Record<Key, Entry> = {
   questNorthOfCancer: "整個圈都要在北回歸線以北。",
   questSouthOfCapricorn: "整個圈都要在南回歸線以南。",
   questTropics: "整個圈都要在南北回歸線之間。",
+  questHigh: (v) => `圈內要有海拔高於 ${v.m} 米的地方。`,
+  highestLine: (v) => `（圈內最高點：海拔 ${v.m} 米）`,
   questRule: (v) => `不完成的話只計合格與否：合格可得 ${v.half} 分，不合格則 0 分。`,
   questDoneLine: "★ 任務完成",
   questMissedLine: (v) => `任務未完成，這個圈只計合格與否`,
@@ -272,7 +276,7 @@ const zh: Record<Key, Entry> = {
   step2: "轉動地球、放大地圖，把圈移到你認為人數剛好的地方。",
   step3: "鎖定圈圈。每個圈只有<strong>一次</strong>機會，之後會顯示真實人數，以及最近的正確圈。",
   helpMaps:
-    "<strong>地圖：</strong>第 1 圈用衛星圖（80 分），第 2 圈用淺色地圖（100 分），第 3 圈用空白地圖（150 分）。第 2、3 圈有每 500 米一條的等高線。",
+    "<strong>地圖：</strong>第 1 圈用衛星圖（80 分），第 2 圈用淺色地圖（100 分），第 3 圈用空白地圖（150 分）。",
   helpScoring:
     "<strong>計分：</strong>越接近目標，分數越高（滿分分別為 80、100、150）。🎯 相差 15% 以內，🟠 2 倍以內，🟡 5 倍以內，⚪ 更遠。第 2 和第 3 圈有任務：不完成的話只計合格與否，🌙 得一半分數。",
   moreGamesLabel: "Game Rabbit：更多遊戲",

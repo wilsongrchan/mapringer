@@ -14,6 +14,7 @@ export interface Result {
   emoji: string;
   points: number;
   seaShare?: number; // fraction of the ring that is sea (for the verdict)
+  highest?: number; // highest ground in the ring, m (height quests only)
 }
 
 // (a new key: results saved by the old one-ring-a-day game are simply ignored)
