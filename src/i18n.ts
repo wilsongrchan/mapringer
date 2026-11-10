@@ -65,8 +65,8 @@ const en = {
   diffStandard: "Standard",
   diffHard: "Hard",
   blurbEasy: "Satellite with labels and borders",
-  blurbStandard: "Light map with labels, no roads",
-  blurbHard: "Land, lakes and rivers only",
+  blurbStandard: "Light map with labels and height lines, no roads",
+  blurbHard: "Land, lakes, rivers and height lines only",
 
   yourRing: "Your ring",
   target: "Target",
@@ -147,19 +147,19 @@ const en = {
 
   // help dialog
   howToPlay: "How to play",
-  demoResult: "<strong>6,556,463</strong> people · <strong>100</strong> 🎯",
+  demoResult: "<strong>6,556,463</strong> people · 🎯 <strong>80</strong> / 80 pts",
   step1: "Each day: three rings, easy to hard. Each has a size and a target population.",
   step2: "Spin the globe and zoom in to put the ring over a place you think fits.",
   step3:
     "Lock it in. <strong>One</strong> try per ring, then see the real count and the closest ring that would have hit it.",
   helpMaps:
-    "<strong>Maps:</strong> ring 1 is on the satellite map (80 pts), ring 2 on a plain map (100 pts), ring 3 on a blank map (150 pts).",
+    "<strong>Maps:</strong> ring 1 is on the satellite map (80 pts), ring 2 on a plain map (100 pts), ring 3 on a blank map (150 pts). Rings 2 and 3 show height lines every 500 m.",
   helpScoring:
     "<strong>Scoring:</strong> the closer to the target, the more points (up to 80, 100 and 150). 🎯 within 15%, 🟠 within 2×, 🟡 within 5×, ⚪ further. Rings 2 and 3 have a quest: skip it and the ring is pass / fail, 🌙 for half points.",
   moreGamesLabel: "Game Rabbit: more games",
   credits: "Credits &amp; licences",
   creditsBody:
-    'Population: <a href="https://human-settlement.emergency.copernicus.eu/ghs_pop2023.php" target="_blank" rel="noopener">GHSL GHS-POP R2023A</a> (2025 estimate, 1 km grid), European Commission JRC, CC BY 4.0. Map: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © OpenMapTiles © OpenStreetMap contributors. Satellite imagery © Esri, Maxar, Earthstar Geographics. Place names: <a href="https://nominatim.org" target="_blank" rel="noopener">Nominatim</a> / OpenStreetMap. Inspired by Tom Forth\'s <a href="https://tomforth.co.uk/circlepopulations/" target="_blank" rel="noopener">circle populations</a>.',
+    'Population: <a href="https://human-settlement.emergency.copernicus.eu/ghs_pop2023.php" target="_blank" rel="noopener">GHSL GHS-POP R2023A</a> (2025 estimate, 1 km grid), European Commission JRC, CC BY 4.0. Map: <a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © OpenMapTiles © OpenStreetMap contributors. Satellite imagery © Esri, Maxar, Earthstar Geographics. Elevation: <a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener">Mapzen Terrain Tiles</a> (SRTM, GMTED, ETOPO1). Place names: <a href="https://nominatim.org" target="_blank" rel="noopener">Nominatim</a> / OpenStreetMap. Inspired by Tom Forth\'s <a href="https://tomforth.co.uk/circlepopulations/" target="_blank" rel="noopener">circle populations</a>.',
   closeLabel: "Close",
 } satisfies Record<string, Entry>;
 
@@ -190,8 +190,8 @@ const zh: Record<Key, Entry> = {
   diffStandard: "標準",
   diffHard: "困難",
   blurbEasy: "衛星圖，有地名和邊界",
-  blurbStandard: "淺色地圖，有地名，沒有道路",
-  blurbHard: "只有陸地、湖泊和河流",
+  blurbStandard: "淺色地圖，有地名和等高線，沒有道路",
+  blurbHard: "只有陸地、湖泊、河流和等高線",
 
   yourRing: "你的圈",
   target: "目標",
@@ -267,18 +267,18 @@ const zh: Record<Key, Entry> = {
   shareTitle: (v) => `圈地家 #${v.n}`,
 
   howToPlay: "玩法",
-  demoResult: "<strong>6,556,463</strong> 人 · <strong>100</strong> 🎯",
+  demoResult: "<strong>6,556,463</strong> 人 · 🎯 <strong>80</strong> / 80 分",
   step1: "每天三個圈，由易到難。每個圈有大小和目標人口。",
   step2: "轉動地球、放大地圖，把圈移到你認為人數剛好的地方。",
   step3: "鎖定圈圈。每個圈只有<strong>一次</strong>機會，之後會顯示真實人數，以及最近的正確圈。",
   helpMaps:
-    "<strong>地圖：</strong>第 1 圈用衛星圖（80 分），第 2 圈用淺色地圖（100 分），第 3 圈用空白地圖（150 分）。",
+    "<strong>地圖：</strong>第 1 圈用衛星圖（80 分），第 2 圈用淺色地圖（100 分），第 3 圈用空白地圖（150 分）。第 2、3 圈有每 500 米一條的等高線。",
   helpScoring:
     "<strong>計分：</strong>越接近目標，分數越高（滿分分別為 80、100、150）。🎯 相差 15% 以內，🟠 2 倍以內，🟡 5 倍以內，⚪ 更遠。第 2 和第 3 圈有任務：不完成的話只計合格與否，🌙 得一半分數。",
   moreGamesLabel: "Game Rabbit：更多遊戲",
   credits: "鳴謝及授權",
   creditsBody:
-    '人口：<a href="https://human-settlement.emergency.copernicus.eu/ghs_pop2023.php" target="_blank" rel="noopener">GHSL GHS-POP R2023A</a>（2025 年估算，1 公里網格），歐盟委員會聯合研究中心（JRC），CC BY 4.0。地圖：<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © OpenMapTiles © OpenStreetMap 貢獻者。衛星圖像 © Esri, Maxar, Earthstar Geographics。地名：<a href="https://nominatim.org" target="_blank" rel="noopener">Nominatim</a> / OpenStreetMap。靈感來自 Tom Forth 的 <a href="https://tomforth.co.uk/circlepopulations/" target="_blank" rel="noopener">circle populations</a>。',
+    '人口：<a href="https://human-settlement.emergency.copernicus.eu/ghs_pop2023.php" target="_blank" rel="noopener">GHSL GHS-POP R2023A</a>（2025 年估算，1 公里網格），歐盟委員會聯合研究中心（JRC），CC BY 4.0。地圖：<a href="https://openfreemap.org" target="_blank" rel="noopener">OpenFreeMap</a> © OpenMapTiles © OpenStreetMap 貢獻者。衛星圖像 © Esri, Maxar, Earthstar Geographics。海拔：<a href="https://registry.opendata.aws/terrain-tiles/" target="_blank" rel="noopener">Mapzen Terrain Tiles</a>（SRTM、GMTED、ETOPO1）。地名：<a href="https://nominatim.org" target="_blank" rel="noopener">Nominatim</a> / OpenStreetMap。靈感來自 Tom Forth 的 <a href="https://tomforth.co.uk/circlepopulations/" target="_blank" rel="noopener">circle populations</a>。',
   closeLabel: "關閉",
 };
 
