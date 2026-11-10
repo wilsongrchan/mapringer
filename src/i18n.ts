@@ -111,10 +111,12 @@ const en = {
   tropicCapricorn: "Tropic of Capricorn",
 
   // result verdicts: one is picked per result ("|" separates the choices)
-  verdictGood: "Ring-markable!|Top of the ring!|Good ring! Good ring!",
-  verdictMeh: "If only I could forget this ring…|It's a ring trap!|You really think outside the ring!",
-  verdictBad: "Next time, maybe try circling zero people…|Who am I? Where am I?",
-  verdictOcean: "People don't usually live in the sea…",
+  // (same order as the Chinese lists, so both languages pick the matching joke)
+  verdictGood: "Ringmaster!|Put a finger on my ring.|What! A! Ring!",
+  verdictMeh: "But here's my number, so ring me maybe?|Is this a ring or a trap?|You're thinking outside the ring… I see",
+  verdictBadFew: "Next time the challenge will be to fit 0 people…|Where do we come from? What are we?",
+  verdictBadMany: "I don't want to be here.|Where do we come from? What are we?",
+  verdictOcean: "Under the sea… under the sea…",
 
   gaugeTarget: "target",
   nobody: "Nobody lives there!",
@@ -227,7 +229,8 @@ const zh: Record<Key, Entry> = {
 
   verdictGood: "可圈可點！|你最終爬上了圈裡之巔。|好圈！好圈！",
   verdictMeh: "如果，圈世界我也可以忘記⋯⋯|這是一個圈套！|你很懂得跳出圈圈哦！",
-  verdictBad: "下一次讓你圈0個人吧⋯⋯|我是誰？我在哪裡？",
+  verdictBadFew: "下一次讓你圈0個人吧⋯⋯|我是誰？我在哪裡？",
+  verdictBadMany: "好擠啊！|我是誰？我在哪裡？",
   verdictOcean: "通常大海裡不住人⋯⋯",
 
   gaugeTarget: "目標",

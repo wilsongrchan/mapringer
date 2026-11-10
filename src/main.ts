@@ -530,7 +530,8 @@ lockBtn.addEventListener("click", async () => {
  */
 function verdict(r: Result): string {
   if (r.score < 40 && (r.seaShare ?? 0) >= 0.5) return t("verdictOcean");
-  const lines = t(r.score >= 75 ? "verdictGood" : r.score >= 40 ? "verdictMeh" : "verdictBad").split("|");
+  const bad = r.population > puzzle.target ? "verdictBadMany" : "verdictBadFew";
+  const lines = t(r.score >= 75 ? "verdictGood" : r.score >= 40 ? "verdictMeh" : bad).split("|");
   const seed = Math.abs(Math.round(r.lng * 1000) * 31 + Math.round(r.lat * 1000) * 7 + r.puzzle);
   return lines[seed % lines.length];
 }
