@@ -66,7 +66,8 @@
           <div>
             <div class="label" data-i18n="target">Target</div>
             <div class="big muted" id="result-target"></div>
-            <div class="place answer-place" id="answer-place" hidden></div>
+            <!-- the closest correct ring: always reserved, so nothing jumps while searching -->
+            <div class="place answer-place" id="answer-place"></div>
           </div>
         </div>
         <div class="score-row">
@@ -82,9 +83,6 @@
           <div class="gauge-labels" id="gauge-labels"></div>
         </div>
         <p class="gauge-caption" id="gauge-caption"></p>
-        <p class="verdict" id="result-verdict"></p>
-        <p class="quest-result" id="quest-result" hidden></p>
-        <p class="answer-line" id="answer-line" hidden></p>
         <div class="actions">
           <button class="primary" id="share-btn" data-i18n="shareResult">Share result</button>
           <!-- test mode only -->

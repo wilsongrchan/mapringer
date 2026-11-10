@@ -531,6 +531,27 @@ dialog ol {
 .answer-place {
   position: relative;
   padding-left: 16px;
+  min-height: 1.4em;
+}
+
+/* both place lines stay on one line (full name in the tooltip) */
+.result-grid .place {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.answer-place.searching {
+  font-style: italic;
+}
+
+.gauge-caption .verdict {
+  font-weight: 400;
+  color: var(--muted);
+}
+
+.result .gauge-caption {
+  margin-bottom: 10px;
 }
 
 .answer-place::before {

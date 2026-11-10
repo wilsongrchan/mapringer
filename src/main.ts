@@ -656,7 +656,9 @@ function renderGauge(r: Result, animate: boolean) {
   marker.classList.toggle("good", r.accuracy >= MATCH_ACCURACY);
   marker.classList.toggle("off-left", offScale && ratio < 1);
   marker.classList.toggle("off-right", offScale && ratio > 1);
-  $("gauge-caption").textContent = gaugeCaption(r);
+  // "53% too many people · Solid placement." on one line
+  const v = Object.assign(document.createElement("span"), { className: "verdict", textContent: ` · ${verdict(r)}` });
+  $("gauge-caption").replaceChildren(gaugeCaption(r), v);
   const gauge = $("gauge");
   gauge.classList.remove("animate");
   gauge.style.setProperty("--pos", "50%");
@@ -768,7 +770,8 @@ function showResult(r: Result, animate: boolean) {
   const bonus = r.bonus ?? 0;
   const plain = mult === 1 && bonus === 0; // points equal the score
   $("result-bar").textContent = emojiBar(r.score);
-  $("result-acc").textContent = `${r.score.toFixed(1)}`;
+  // a star after the score when the side-quest bonus was earned
+  $("result-acc").textContent = `${r.score.toFixed(1)}${bonus ? " ⭐" : ""}`;
   // the final number is orange: the score itself, or the total after multiplier / bonus
   $("result-acc").classList.toggle("final", plain);
   $("result-summary").innerHTML = t("summary", {
@@ -783,13 +786,6 @@ function showResult(r: Result, animate: boolean) {
         parts: [bonus ? `+${bonus}★` : "", mult !== 1 ? `×${mult}` : ""].filter(Boolean).join(" "),
         points: r.points.toFixed(1),
       });
-  // Side quests are optional extras: say nothing if you didn't do it,
-  // celebrate if you did.
-  const qr = $("quest-result");
-  qr.hidden = !r.questDone;
-  qr.className = `quest-result ${bonus ? "done" : ""}`;
-  qr.textContent = bonus ? t("questDone", { bonus }) : t("questDoneLowScore", { min: BONUS_MIN_SCORE });
-  $("result-verdict").textContent = verdict(r);
   updateRing();
   setCenters([{ kind: "mine", at: center }]);
   showPlace($("result-place"), center, myAttempt);
@@ -801,7 +797,6 @@ function showResult(r: Result, animate: boolean) {
     if (myAttempt === attempt) fitRings([{ center, radiusKm: puzzle.radiusKm * 1.3 }], animate ? 800 : 0);
   });
 
-  $("answer-place").hidden = true;
   if (r.accuracy >= MATCH_ACCURACY) {
     setAnswerLine("found");
     return;
@@ -829,13 +824,15 @@ function countUp(el: HTMLElement, value: number, ms: number) {
   requestAnimationFrame(step);
 }
 
-function setAnswerLine(state: "searching" | "found" | "error" | "hide", html = "") {
-  const el = $("answer-line");
-  el.hidden = state === "hide";
+/** The line under the target: searching, found, or why there's no answer ring. */
+function setAnswerLine(state: "searching" | "found" | "error" | "hide", text = "") {
+  const el = $("answer-place");
   el.classList.toggle("searching", state === "searching");
+  el.title = "";
   if (state === "searching") el.textContent = t("searching");
-  else if (state === "found") el.innerHTML = html || t("foundSelf");
+  else if (state === "found") el.textContent = text || t("foundSelf");
   else if (state === "error") el.textContent = t("searchError");
+  else el.textContent = "";
 }
 
 /** Fill `el` with "📍 Town, Country" for a point (coordinates until the name arrives). */
@@ -844,7 +841,10 @@ function showPlace(el: HTMLElement, at: LngLat, myAttempt: number, prefix = "�
   el.title = coords(at);
   placeName(at)
     .then((name) => {
-      if (myAttempt === attempt && el.isConnected) el.textContent = `${prefix}${name}`;
+      if (myAttempt === attempt && el.isConnected) {
+        el.textContent = `${prefix}${name}`;
+        el.title = `${prefix}${name}`; // the line may be cut short on phones
+      }
     })
     .catch(() => {}); // keep showing coordinates
 }
@@ -856,17 +856,9 @@ function showAnswer(r: Result, res: AnswerResult, animate: boolean) {
     return;
   }
   const where = t("away", { km: fmt(a.distanceKm) });
-  if (res.answer) {
-    // a correct ring exists: say where, under the target ("4 km away · Hong Kong")
-    setAnswerLine("hide");
-    const el = $("answer-place");
-    el.hidden = false;
-    showPlace(el, a.center, attempt, `${where} · `);
-  } else {
-    // nothing hits the target nearby: that needs a sentence
-    setAnswerLine("found", t("noHit", { km: fmt(res.searchedKm), pop: fmt(a.population), acc: a.accuracy.toFixed(1), where }) + `<span id="nohit-place"></span>${t("endStop")}`);
-    showPlace($("nohit-place"), a.center, attempt, "");
-  }
+  // under the target: "4 km away · Hong Kong", or the best miss "Best nearby (80%): 15 km away · …"
+  setAnswerLine("found");
+  showPlace($("answer-place"), a.center, attempt, res.answer ? `${where} · ` : t("noHit", { acc: a.accuracy.toFixed(1), where }));
   setData("answer", circleFeature(a.center, puzzle.radiusKm));
   setCenters([
     { kind: "mine", at: { lng: r.lng, lat: r.lat } },
