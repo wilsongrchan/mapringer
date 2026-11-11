@@ -926,6 +926,28 @@ dialog {
   }
 }
 
+/* the whole quest box is a button: show what it's about on the map */
+.quest {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background-color 0.15s;
+}
+
+.quest:hover {
+  background: rgba(245, 183, 0, 0.2);
+}
+
+.quest:active {
+  background: rgba(245, 183, 0, 0.28);
+}
+
+.quest-go {
+  float: right;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
 .quest-star {
   color: #f5b700;
 }
@@ -966,6 +988,10 @@ dialog {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+.quest-answer:not(.searching) {
+  cursor: pointer;
 }
 
 .quest-answer.searching {

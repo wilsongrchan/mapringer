@@ -11,7 +11,7 @@ import { circleRing, haversineKm, type LngLat } from "./geo";
 import { coords, placeName } from "./places";
 import { CITIES } from "./cities";
 import { highestInRing } from "./elevation";
-import { COUNTRIES, countryAt, GEOMETRY_ONLY, questAnchors, questDone, questFor, surveyRing, TROPIC_LAT, type Continent, type Quest } from "./quests";
+import { CONTINENT_VIEW, COUNTRIES, countryAt, GEOMETRY_ONLY, questAnchors, questDone, questFor, surveyRing, TROPIC_LAT, type Continent, type Quest } from "./quests";
 import { populationInRing, preloadPopulation, readBlock, readCountryBlock, readLandBlock } from "./population";
 import {
   accuracy,
@@ -272,6 +272,98 @@ function refreshHints() {
   }
   apply(NO_AREAS);
 }
+
+/**
+ * Tap the quest: while placing, fly to what it's about (the country,
+ * continent, city circle, line or meridian, the nearest continent border, or
+ * the nearest place that suits it); after lock-in, to the gold ring that does
+ * it, if there is one.
+ */
+function questFocus(): maplibregl.LngLatBounds | null {
+  if (!quest) return null;
+  const here = map.getCenter().wrap();
+  const around = (lng: number, lat: number, km: number) => boundsOf([{ center: { lng, lat }, radiusKm: km }]);
+  const gold = locked ? centerPoints.find((p) => p.kind === "quest") : undefined;
+  if (gold) return boundsOf([{ center: gold.at, radiusKm: puzzle.radiusKm * 1.6 }]);
+  switch (quest.kind) {
+    case "continent": {
+      const [w, s, e, n] = CONTINENT_VIEW[quest.continent];
+      return new maplibregl.LngLatBounds([w, s], [e, n]);
+    }
+    case "country": {
+      // the country's biggest piece (so islands far away don't zoom the map right out)
+      const polys = areasData.features.flatMap((f) => {
+        const g = f.geometry as { type: string; coordinates: number[][][] | number[][][][] };
+        return g.type === "Polygon" ? [g.coordinates as number[][][]] : (g.coordinates as number[][][][]);
+      });
+      const biggest = polys.sort((a, b) => b[0].length - a[0].length)[0];
+      if (biggest) {
+        const b = new maplibregl.LngLatBounds();
+        for (const [lng, lat] of biggest[0]) b.extend([lng, lat]);
+        return b;
+      }
+      break;
+    }
+    case "nearCity": {
+      const c = cityOf(quest.city);
+      if (c) return boundsOf([{ center: c, radiusKm: quest.km * 1.15 }]);
+      break;
+    }
+    case "equator":
+      return around(here.lng, 0, 2200);
+    case "northOfCancer":
+      return around(here.lng, TROPIC_LAT, 2200);
+    case "southOfCapricorn":
+      return around(here.lng, -TROPIC_LAT, 2200);
+    case "tropics":
+      return around(here.lng, 0, 3000);
+    case "west":
+    case "east": {
+      // the nearer of the two meridians that split the hemispheres
+      const m = Math.abs(here.lng) < 90 ? 0 : here.lng > 0 ? 180 : -180;
+      return around(m, Math.max(-50, Math.min(50, here.lat)), 2200);
+    }
+    case "twoContinents": {
+      // the continent border nearest the map's centre
+      let best: { b: maplibregl.LngLatBounds; d: number } | null = null;
+      for (const f of borderLines) {
+        const coords = (f.geometry as { coordinates: [number, number][] }).coordinates;
+        const d = Math.min(...coords.map(([lng, lat]) => haversineKm(here, { lng, lat })));
+        if (!best || d < best.d) {
+          const b = new maplibregl.LngLatBounds();
+          for (const p of coords) b.extend(p);
+          best = { b, d };
+        }
+      }
+      if (best) {
+        const c = best.b.getCenter();
+        return around(c.lng, c.lat, 600);
+      }
+      break;
+    }
+  }
+  // height, islands only, no sea…: the nearest place that suits the quest
+  const near = questAnchors(quest, here)[0];
+  return near ? around(near.lng, near.lat, 250) : null;
+}
+
+function goToQuest() {
+  const b = questFocus();
+  if (!b) return;
+  const pad = locked ? padding() : { top: $("challenge").getBoundingClientRect().bottom + 20, bottom: 130, left: 30, right: 30 };
+  map.fitBounds(b, { padding: pad, duration: 1400, maxZoom: locked ? 13 : 8 });
+}
+$("quest").addEventListener("click", goToQuest);
+// the "★ Closest that does the quest" line in the results goes there too
+$("quest-answer").addEventListener("click", () => {
+  if (centerPoints.some((p) => p.kind === "quest")) goToQuest();
+});
+$("quest").addEventListener("keydown", (e) => {
+  if (e.key === "Enter" || e.key === " ") {
+    e.preventDefault();
+    goToQuest();
+  }
+});
 
 function renderQuest() {
   refreshHints();

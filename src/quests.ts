@@ -133,6 +133,16 @@ const KIND_ANCHORS: Partial<Record<Quest["kind"], At[]>> = {
   high: [[45.07, 7.69], [47.27, 11.39], [4.71, -74.07], [19.43, -99.13], [9.03, 38.74], [-0.18, -78.47], [-16.5, -68.15], [27.7, 85.32], [35.69, 51.39], [15.37, 44.19], [-1.29, 36.82], [39.74, -104.99]],
 };
 
+/** Rough view of each continent, [west, south, east, north], for "show on map". */
+export const CONTINENT_VIEW: Record<Continent, [number, number, number, number]> = {
+  africa: [-18, -35, 52, 37],
+  asia: [60, 5, 145, 55],
+  europe: [-10, 36, 45, 71],
+  northAmerica: [-128, 12, -62, 58],
+  southAmerica: [-82, -55, -34, 12],
+  oceania: [112, -45, 179, -8],
+};
+
 /**
  * Places that suit a quest, to search from for a sample ring that does it
  * (when the player's ring didn't). Nearest to `near` first.

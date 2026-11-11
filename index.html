@@ -42,8 +42,9 @@
       <div class="label" id="challenge-label">Today's ring</div>
       <div class="challenge-line" id="challenge-line">
       </div>
-      <div class="quest" id="quest">
-        <span class="quest-head"><span class="quest-star">★</span> <span data-i18n="sideQuest">Quest</span></span>
+      <!-- tap the quest to see where it's about (or, after lock-in, the gold ring that does it) -->
+      <div class="quest" id="quest" role="button" tabindex="0">
+        <span class="quest-head"><span class="quest-star">★</span> <span data-i18n="sideQuest">Quest</span><span class="quest-go" data-i18n="questShow">Show on map ›</span></span>
         <p class="quest-text" id="quest-text"></p>
       </div>
     </section>
