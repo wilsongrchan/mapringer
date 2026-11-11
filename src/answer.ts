@@ -11,7 +11,7 @@ export interface Answer {
 export interface AnswerResult {
   /** Closest ring within ~2% of the target, if one exists in the search area. */
   answer: Answer | null;
-  /** When there's no match: the ring that came closest to the target. */
+  /** When there's no match: the ring that came closest to the target (that passes `accept`, if given). */
   best: Answer | null;
   searchedKm: number;
 }
@@ -48,6 +48,10 @@ export async function findClosestAnswer(
     const found = searchBlock(block, player, radiusKm, target, searchKm, accept ? MAX_CHECKED : 1);
     if (accept) {
       for (const m of found.matches) if (await accept(m.center)) return { answer: m, best: null, searchedKm };
+      // no match does it: remember the closest ring that does, as a fallback
+      for (const m of [...found.near, found.best]) {
+        if (m && (!best || m.accuracy > best.accuracy) && (await accept(m.center))) best = m;
+      }
       await new Promise((r) => setTimeout(r, 0));
       continue;
     }
@@ -71,9 +75,9 @@ export function searchBlock(
   searchKm: number,
   /** Collect up to this many separate matches (nearest first) instead of stopping at the first. */
   maxMatches = 1,
-): { match: Answer | null; best: Answer | null; matches: Answer[] } {
+): { match: Answer | null; best: Answer | null; matches: Answer[]; near: Answer[] } {
   const { grid, rows, cols, values } = block;
-  if (!rows || !cols) return { match: null, best: null, matches: [] };
+  if (!rows || !cols) return { match: null, best: null, matches: [], near: [] };
   const res = grid.res;
   const dyKm = res * KM_PER_DEG;
 
@@ -122,6 +126,7 @@ export function searchBlock(
 
   let exactChecks = 0;
   const matches: Answer[] = [];
+  const near: Answer[] = []; // good but not within 5%: fallbacks when a check rules out every match
   for (const cand of candidates) {
     if (exactChecks++ >= MAX_EXACT) break;
     const start = { lat: cand.lat, lng: cand.lng };
@@ -130,18 +135,19 @@ export function searchBlock(
     const pop = sumCircleBlock(block, start, radiusKm);
     if (accuracy(pop, target) < 90) continue;
     const best = refine(block, start, pop, radiusKm, target);
+    const a = { ...best, distanceKm: haversineKm(player, best.center) };
     if (best.accuracy >= MATCH_ACCURACY) {
-      matches.push({ ...best, distanceKm: haversineKm(player, best.center) });
+      matches.push(a);
       if (matches.length >= maxMatches) break;
-    }
+    } else if (maxMatches > 1 && near.length < maxMatches) near.push(a);
   }
-  if (matches.length) return { match: matches[0], best: null, matches };
+  if (matches.length && maxMatches === 1) return { match: matches[0], best: null, matches, near };
 
-  // No match: report the ring that got closest to the target instead.
-  if (bestApprox.acc <= 0) return { match: null, best: null, matches };
+  // No match (or a check may rule them all out): the ring that got closest to the target.
+  if (bestApprox.acc <= 0) return { match: matches[0] ?? null, best: null, matches, near };
   const start = { lat: bestApprox.lat, lng: bestApprox.lng };
   const b = refine(block, start, sumCircleBlock(block, start, radiusKm), radiusKm, target);
-  return { match: null, best: { ...b, distanceKm: haversineKm(player, b.center) }, matches };
+  return { match: matches[0] ?? null, best: { ...b, distanceKm: haversineKm(player, b.center) }, matches, near };
 }
 
 /** Hill-climb the ring centre to get as close to the target as possible. */

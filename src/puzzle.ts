@@ -9,7 +9,7 @@ export interface Puzzle {
   radiusKm: number;
   target: number;
   /** Set on occasional "twist" puzzles that flip the usual size/crowd pairing. */
-  twist?: "empty-giant" | "packed-tiny";
+  twist?: Twist;
 }
 
 /**
@@ -17,6 +17,7 @@ export interface Puzzle {
  * more points; rings 2 and 3 come with a side quest (see quests.ts).
  */
 export type Stage = 0 | 1 | 2;
+export type Twist = "empty-giant" | "packed-tiny" | "void" | "mega-crowd";
 export const STAGES = [
   { map: "easy", max: 80 },
   { map: "standard", max: 100 },
@@ -33,8 +34,33 @@ const TINY_RING_MAX: Record<number, number> = { 3: 3_980_000, 5: 6_930_000 };
 const logUniform = (rand: () => number, lo: number, hi: number) =>
   Math.exp(Math.log(lo) + rand() * (Math.log(hi) - Math.log(lo)));
 
+/**
+ * The fullest rings in the GHSL data (all around northern India and the Ganges
+ * plain; measured on a 0.5° grid). Mega-crowd targets are 35–85% of these.
+ */
+const MEGA_RING_MAX: Record<number, number> = { 750: 894_000_000, 1000: 1_305_000_000, 1500: 1_875_000_000, 2000: 2_216_000_000 };
+/**
+ * Void rings: thousands of km wide, a few hundred to 20,000 people, so only
+ * remote ocean islands fit (Pitcairn, Tristan da Cunha, the Falklands…). The
+ * target ranges are ones the data can hit with islands alone (checked on a 2°
+ * grid of ring centres); 3,000 km rings need a bigger crowd.
+ */
+const VOID_TARGETS: Record<number, [number, number]> = { 2000: [300, 20_000], 2500: [300, 20_000], 3000: [8_000, 20_000] };
+
 function twistPuzzle(number: number, rand: () => number): Puzzle {
-  if (rand() < 0.5) {
+  const kind = rand();
+  if (kind < 0.25) {
+    // A vast ring with almost nobody in it: out in the emptiest oceans.
+    const radiusKm = pick(rand, [2000, 2500, 3000]);
+    const [lo, hi] = VOID_TARGETS[radiusKm];
+    return { number, stage: 2, radiusKm, target: niceRound(logUniform(rand, lo, hi)), twist: "void" };
+  }
+  if (kind < 0.5) {
+    // A colossal crowd: hundreds of millions of people in one ring.
+    const radiusKm = pick(rand, [750, 1000, 1500, 2000]);
+    return { number, stage: 2, radiusKm, target: niceRound(MEGA_RING_MAX[radiusKm] * (0.35 + rand() * 0.5)), twist: "mega-crowd" };
+  }
+  if (kind < 0.75) {
     // A huge ring with hardly anyone in it: remote islands, deserts, the far north.
     const radiusKm = [500, 750, 1000][Math.floor(rand() * 3)];
     return { number, stage: 2, radiusKm, target: niceRound(logUniform(rand, 500, 20_000)), twist: "empty-giant" };
@@ -96,7 +122,7 @@ function ringOf(number: number, stage: Stage, radiusKm: number, rand: () => numb
 const EASY_RADII_KM = [10, 15, 20, 25, 30];
 const MEDIUM_RADII_KM = [5, 8, 10, 15, 20, 25, 30, 40, 50];
 const HARD_BIG_RADII_KM = [100, 200, 300];
-const HARD_TWIST_CHANCE = 0.1;
+const HARD_TWIST_CHANCE = 0.2; // split evenly between the four twists
 const HARD_BIG_CHANCE = 0.15;
 const pick = <T>(rand: () => number, xs: readonly T[]) => xs[Math.floor(rand() * xs.length)];
 

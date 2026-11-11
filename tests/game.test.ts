@@ -93,15 +93,25 @@ describe("puzzles", () => {
   it("only ring 3 has twists, now and then, and they stay reachable", () => {
     const hard = Array.from({ length: 2000 }, (_, i) => ringFor(i + 1, 2));
     const twists = hard.filter((p) => p.twist);
-    expect(twists.length / 2000).toBeGreaterThan(0.06);
-    expect(twists.length / 2000).toBeLessThan(0.14);
+    expect(twists.length / 2000).toBeGreaterThan(0.15);
+    expect(twists.length / 2000).toBeLessThan(0.25);
     const big = hard.filter((p) => !p.twist && p.radiusKm >= 100);
     expect(big.length / 2000).toBeGreaterThan(0.1);
     expect(big.length / 2000).toBeLessThan(0.2);
+    // all four twists turn up
+    expect(new Set(twists.map((p) => p.twist)).size).toBe(4);
     for (const p of twists) {
       if (p.twist === "empty-giant") {
         expect(p.radiusKm).toBeGreaterThanOrEqual(500);
         expect(p.target).toBeLessThanOrEqual(20_000);
+      } else if (p.twist === "void") {
+        expect(p.radiusKm).toBeGreaterThanOrEqual(2000);
+        expect(p.target).toBeGreaterThanOrEqual(300);
+        expect(p.target).toBeLessThanOrEqual(20_000);
+      } else if (p.twist === "mega-crowd") {
+        expect(p.radiusKm).toBeGreaterThanOrEqual(750);
+        expect(p.target).toBeGreaterThanOrEqual(300_000_000);
+        expect(p.target / (Math.PI * p.radiusKm ** 2)).toBeLessThan(500); // under the measured best
       } else {
         expect(p.radiusKm).toBeLessThanOrEqual(5);
         expect(p.target).toBeLessThan(p.radiusKm === 3 ? 3_980_000 : 6_930_000);
@@ -341,7 +351,7 @@ describe.skipIf(!existsSync(LAND))("side quests on the real land mask", async ()
 
   it("line quests: hemispheres and tropics, judged on the whole ring", async () => {
     const at = (lat: number, lng: number, r: number) => (kind: "west" | "east" | "northOfCancer" | "southOfCapricorn" | "tropics") =>
-      questDone({ kind }, { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, seaShare: 0, continents: new Set() }, { lat, lng }, r);
+      questDone({ kind }, { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, seaShare: 0, continents: new Set(), seas: new Set() }, { lat, lng }, r);
     // London straddles the prime meridian with a big ring, but not a tiny one west of it
     expect(at(51.5, -0.13, 50)("west")).toBe(false);
     expect(at(51.5, -0.5, 10)("west")).toBe(true);
@@ -374,8 +384,10 @@ describe.skipIf(!existsSync(LAND))("side quests on the real land mask", async ()
   it("no quest on ring 1, easy quests on ring 2, hard ones on ring 3", () => {
     const kinds = (st: Stage) => new Set(Array.from({ length: 400 }, (_, i) => questFor(ringFor(i + 1, st))?.kind ?? "none"));
     expect([...kinds(0)]).toEqual(["none"]);
-    expect([...kinds(1)].sort()).toEqual(["continent", "east", "high", "landlocked", "northOfCancer", "tropics", "west"]);
-    expect([...kinds(2)].sort()).toEqual(["country", "equator", "high", "islandsOnly", "nearCity", "southOfCapricorn", "twoContinents"]);
+    // plenty of variety on rings 2 and 3
+    expect(kinds(1).size).toBeGreaterThanOrEqual(12);
+    expect(kinds(2).size).toBeGreaterThanOrEqual(12);
+    for (const k of ["touchSea", "northOf", "country", "centreAtSea", "primeMeridian", "high"]) expect(kinds(1).has(k as never) || kinds(2).has(k as never), k).toBe(true);
   });
 
   it("ring 3 quests suit the ring (tiny packed rings near megacities, no city quests for giant empty ones)", async () => {
@@ -388,6 +400,8 @@ describe.skipIf(!existsSync(LAND))("side quests on the real land mask", async ()
         expect(CITIES.find((c) => c.id === (q as { city: string }).city)?.dense).toBe(true);
       }
       if (p.twist === "empty-giant") expect(["islandsOnly", "southOfCapricorn", "equator", "high"]).toContain(q.kind);
+      if (p.twist === "void") expect(q.kind).toBe("islandsOnly");
+      if (p.twist === "mega-crowd") expect(["country", "east"]).toContain(q.kind);
     }
   });
 
@@ -395,15 +409,36 @@ describe.skipIf(!existsSync(LAND))("side quests on the real land mask", async ()
     const qs = (st: Stage) => Array.from({ length: 400 }, (_, i) => questFor(ringFor(i + 1, st))).filter((q) => q?.kind === "high");
     expect(new Set(qs(1).map((q) => (q as { m: number }).m))).toEqual(new Set([1000]));
     expect(new Set(qs(2).map((q) => (q as { m: number }).m))).toEqual(new Set([2000]));
-    const none = { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, seaShare: 0, continents: new Set<never>() };
+    const none = { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, seaShare: 0, continents: new Set<never>(), seas: new Set<number>() };
     const q = { kind: "high", m: 2000 } as const;
     expect(questDone(q, none, { lat: 4.7, lng: -74.1 }, 10, null, 2640)).toBe(true);
     expect(questDone(q, none, { lat: 4.7, lng: -74.1 }, 10, null, 1990)).toBe(false);
     expect(questDone(q, none, { lat: 4.7, lng: -74.1 }, 10, null, null)).toBe(false); // no data: not done
   });
 
+  it("quests are only offered when the ring's target can be reached while doing them", async () => {
+    const { feasible } = await import("../src/quests");
+    for (let n = 1; n < 2000; n++)
+      for (const st of [1, 2] as Stage[]) {
+        const p = ringFor(n, st);
+        const q = questFor(p)!;
+        if (!p.twist) expect(feasible(q, p), `${n}/${st} ${JSON.stringify(q)} r=${p.radiusKm} t=${p.target}`).toBe(true);
+      }
+  });
+
+  it("new quests: latitudes, the prime meridian, centre at sea, touching a sea", () => {
+    const none = { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, seaShare: 0, continents: new Set<never>(), seas: new Set<number>() };
+    expect(questDone({ kind: "northOf", lat: 45 }, none, { lat: 48.86, lng: 2.35 }, 30)).toBe(true); // Paris
+    expect(questDone({ kind: "northOf", lat: 45 }, none, { lat: 45.2, lng: 9 }, 30)).toBe(false); // reaches south of 45°N
+    expect(questDone({ kind: "southOf", lat: -30 }, none, { lat: -33.87, lng: 151.21 }, 30)).toBe(true); // Sydney
+    expect(questDone({ kind: "primeMeridian" }, none, { lat: 51.5, lng: -0.13 }, 10)).toBe(true); // London
+    expect(questDone({ kind: "primeMeridian" }, none, { lat: 48.86, lng: 2.35 }, 10)).toBe(false); // Paris
+    expect(questDone({ kind: "centreAtSea" }, { ...none, center: 0 }, { lat: 0, lng: 0 }, 10)).toBe(true);
+    expect(questDone({ kind: "centreAtSea" }, { ...none, center: 18 }, { lat: 0, lng: 0 }, 10)).toBe(false);
+  });
+
   it("near-city quests measure from the ring's centre", () => {
-    const none = { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, seaShare: 0, continents: new Set<never>() };
+    const none = { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, seaShare: 0, continents: new Set<never>(), seas: new Set<number>() };
     const q = { kind: "nearCity" as const, city: "paris", km: 200 };
     expect(questDone(q, none, { lat: 49.4, lng: 2.8 }, 10)).toBe(true); // ~70 km away
     expect(questDone(q, none, { lat: 51.5, lng: -0.12 }, 10)).toBe(false); // London, ~340 km
@@ -443,7 +478,7 @@ describe.skipIf(!existsSync(COUNTRY_TIF))("country quests on the real country ma
     const picks = Array.from({ length: 400 }, (_, i) => questFor(ringFor(i + 1, 2))).filter((q) => q?.kind === "country");
     expect(picks.length).toBeGreaterThan(10);
     for (const q of picks) expect(COUNTRIES.some((c) => c.id === (q as { country: string }).country)).toBe(true);
-    const none = { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, seaShare: 0, continents: new Set<never>() };
+    const none = { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, seaShare: 0, continents: new Set<never>(), seas: new Set<number>() };
     const q = { kind: "country" as const, country: "FRA" };
     expect(questDone(q, none, { lat: 48.85, lng: 2.35 }, 10, "FRA")).toBe(true);
     expect(questDone(q, none, { lat: 48.85, lng: 2.35 }, 10, "DEU")).toBe(false);

@@ -10,8 +10,9 @@ import { applyMapStyle, applyRevealStyle, DIFFICULTIES, GLOBE, prefetchStyles, t
 import { circleRing, haversineKm, type LngLat } from "./geo";
 import { coords, placeName } from "./places";
 import { CITIES } from "./cities";
+import { loadSeaLookup } from "./seagrid";
 import { highestInRing, TILE_URL as ELEVATION_TILES } from "./elevation";
-import { CONTINENT_VIEW, COUNTRIES, countryAt, GEOMETRY_ONLY, questAnchors, questDone, questFor, surveyRing, TROPIC_LAT, type Continent, type Quest } from "./quests";
+import { CONTINENT_VIEW, COUNTRIES, countryAt, GEOMETRY_ONLY, questAnchors, SEAS, questDone, questFor, surveyRing, TROPIC_LAT, type Continent, type Quest } from "./quests";
 import { populationInRing, preloadPopulation, readBlock, readCountryBlock, readLandBlock } from "./population";
 import {
   accuracy,
@@ -153,6 +154,8 @@ const QUEST_TEXT = {
   northOfCancer: "questNorthOfCancer",
   southOfCapricorn: "questSouthOfCapricorn",
   tropics: "questTropics",
+  centreAtSea: "questCentreAtSea",
+  primeMeridian: "questPrimeMeridian",
 } as const;
 
 const countryName = (id: string) => {
@@ -162,11 +165,17 @@ const countryName = (id: string) => {
 
 const cityOf = (id: string) => CITIES.find((c) => c.id === id);
 
+/** A height in metres, and in feet for the English text ("1,000 m (3,281 ft)"). */
+const heights = (m: number) => ({ m: fmt(m), ft: fmt(Math.round(m * 3.28084)) });
+
 function questText(q: Quest): string {
   if (q.kind === "continent") return t("questContinent", { continent: t(q.continent) });
   if (q.kind === "country") return t("questCountry", { country: countryName(q.country) });
   if (q.kind === "nearCity") return t("questNearCity", { city: cityOf(q.city)?.[LANG] ?? q.city, km: q.km });
-  if (q.kind === "high") return t("questHigh", { m: fmt(q.m) });
+  if (q.kind === "high") return t("questHigh", heights(q.m));
+  if (q.kind === "touchSea") return t("questTouchSea", { sea: SEAS.find((x) => x.id === q.sea)?.[LANG] ?? q.sea });
+  if (q.kind === "northOf") return t("questNorthOf", { lat: q.lat });
+  if (q.kind === "southOf") return t("questSouthOf", { lat: -q.lat });
   return t(QUEST_TEXT[q.kind]);
 }
 
@@ -210,7 +219,13 @@ function parallelLines() {
             ? [parallel(TROPIC_LAT, t("tropicCancer")), parallel(-TROPIC_LAT, t("tropicCapricorn"))]
             : quest.kind === "west" || quest.kind === "east"
               ? [meridian(0, t("primeMeridian")), meridian(180, t("antimeridian"))]
-              : [];
+              : quest.kind === "primeMeridian"
+                ? [meridian(0, t("primeMeridian"))]
+                : quest.kind === "northOf"
+                  ? [parallel(quest.lat, t("latN", { lat: quest.lat }))]
+                  : quest.kind === "southOf"
+                    ? [parallel(quest.lat, t("latS", { lat: -quest.lat }))]
+                    : [];
   return { type: "FeatureCollection" as const, features: lines };
 }
 
@@ -315,6 +330,17 @@ function questFocus(): maplibregl.LngLatBounds | null {
       if (c) return boundsOf([{ center: c, radiusKm: quest.km * 1.15 }]);
       break;
     }
+    case "touchSea": {
+      const id = quest.sea;
+      const sea = SEAS.find((x) => x.id === id);
+      if (sea) return new maplibregl.LngLatBounds([sea.view[0], sea.view[1]], [sea.view[2], sea.view[3]]);
+      break;
+    }
+    case "northOf":
+    case "southOf":
+      return around(here.lng, quest.lat, 1800);
+    case "primeMeridian":
+      return around(0, Math.max(-50, Math.min(55, here.lat)), 1500);
     case "equator":
       return around(here.lng, 0, 2200);
     case "northOfCancer":
@@ -332,6 +358,7 @@ function questFocus(): maplibregl.LngLatBounds | null {
     case "landlocked":
     case "islandsOnly":
     case "high":
+    case "centreAtSea":
       // no zooming help for these: finding the place is the quest
       return null;
     case "twoContinents": {
@@ -356,9 +383,12 @@ function questFocus(): maplibregl.LngLatBounds | null {
   return null;
 }
 
+/** Quests where finding the place is the point: no "Show on map" while placing. */
+const NO_ZOOM = new Set<Quest["kind"]>(["landlocked", "islandsOnly", "high", "centreAtSea"]);
+
 /** Only quests that have somewhere to show look tappable ("Show on map ›"). */
 function syncQuestGo() {
-  const can = !!quest && (centerPoints.some((p) => p.kind === "quest") || !["landlocked", "islandsOnly", "high"].includes(quest.kind));
+  const can = !!quest && (centerPoints.some((p) => p.kind === "quest") || !NO_ZOOM.has(quest.kind));
   $("quest").classList.toggle("can-go", can);
   if (can) $("quest").setAttribute("role", "button");
   else $("quest").removeAttribute("role");
@@ -401,7 +431,8 @@ function renderPuzzle() {
   $("puzzle-num").textContent = practice ? t("practiceTag") : `#${day}${UNLIMITED ? t("testTag") : ""}`;
   // "Ring 2 of 3 · Standard map · 100 pts", plus the twist if there is one
   const ringLabel = t("ringLabel", { n: stage + 1, map: DIFFICULTIES[STAGES[stage].map].label, max: STAGES[stage].max });
-  const twist = puzzle.twist === "empty-giant" ? t("twistGiant") : puzzle.twist === "packed-tiny" ? t("twistTiny") : "";
+  const TWIST_LABEL = { "empty-giant": "twistGiant", "packed-tiny": "twistTiny", void: "twistVoid", "mega-crowd": "twistMega" } as const;
+  const twist = puzzle.twist ? t(TWIST_LABEL[puzzle.twist]) : "";
   $("challenge-label").textContent = twist ? `${ringLabel} · ${twist}` : ringLabel;
   $("challenge-label").classList.add("twist"); // always shown: it says which ring this is
   $("challenge-line").innerHTML = t("challengeLine", {
@@ -634,13 +665,15 @@ lockBtn.addEventListener("click", async () => {
       // the side quest is a bonus: if the land data can't load, it just doesn't count
       Promise.all([
         readLandBlock(center, puzzle.radiusKm),
+        // sea quests: which named waters the ring touches
+        quest?.kind === "touchSea" ? loadSeaLookup() : undefined,
         // country quests only need the cells right around the centre
         quest?.kind === "country" ? readCountryBlock(center, 3).then((block) => countryAt(block, center)) : null,
         // height quests: the highest ground in the ring, from the elevation tiles
         quest?.kind === "high" ? highestInRing(center, puzzle.radiusKm) : null,
       ])
-        .then(([block, country, high]) => {
-          const surface = surveyRing(block, center, puzzle.radiusKm);
+        .then(([block, seaAt, country, high]) => {
+          const surface = surveyRing(block, center, puzzle.radiusKm, seaAt);
           seaShare = surface.seaShare;
           highest = high;
           return quest ? questDone(quest, surface, center, puzzle.radiusKm, country, high) : false;
@@ -991,7 +1024,7 @@ function showResult(r: Result, animate: boolean) {
   qr.hidden = r.questDone === undefined;
   qr.classList.toggle("done", !!r.questDone);
   qr.textContent = r.questDone ? t("questDoneLine") : t("questMissedLine", { pass: PASS_SCORE });
-  if (r.highest !== undefined) qr.textContent += t("highestLine", { m: fmt(r.highest) });
+  if (r.highest !== undefined) qr.textContent += t("highestLine", heights(r.highest));
   renderDayEnd();
   updateRing();
   setCenters([{ kind: "mine", at: center }]);
@@ -1105,17 +1138,20 @@ function showAnswer(r: Result, res: AnswerResult, animate: boolean) {
 /** Does a ring here do the quest? (Reads the land / country / height data it needs.) */
 async function questOkAt(q: Quest, center: LngLat): Promise<boolean> {
   const r = puzzle.radiusKm;
-  const blank = { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, continents: new Set<never>(), seaShare: 0 };
+  const blank = { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, continents: new Set<never>(), seaShare: 0, seas: new Set<number>() };
   if (GEOMETRY_ONLY.has(q.kind)) return questDone(q, blank, center, r);
   if (q.kind === "country") return questDone(q, blank, center, r, countryAt(await readCountryBlock(center, 3), center));
   if (q.kind === "high") return questDone(q, blank, center, r, null, await highestInRing(center, r));
-  return questDone(q, surveyRing(await readLandBlock(center, r), center, r), center, r);
+  const seaAt = q.kind === "touchSea" ? await loadSeaLookup() : undefined;
+  return questDone(q, surveyRing(await readLandBlock(center, r), center, r, seaAt), center, r);
 }
 
 /**
- * When the quest wasn't done: find a sample ring that hits the target (within
- * 5%) and does the quest, searching around the player's ring first, then
- * around places that suit the quest (nearest first).
+ * When the green ring doesn't do the quest: find the closest ring that hits
+ * the target (within 5%) and does it, searching around the player's ring
+ * first, then around places that suit the quest (nearest first). If none is
+ * that close, show the ring that does the quest and comes closest to the
+ * target, with how close it gets: there's always a gold ring.
  */
 async function findQuestAnswer(r: Result, q: Quest, myAttempt: number, animate: boolean) {
   const el = $("quest-answer");
@@ -1123,17 +1159,31 @@ async function findQuestAnswer(r: Result, q: Quest, myAttempt: number, animate: 
   el.classList.add("searching");
   el.textContent = t("questSearching");
   const player = { lng: r.lng, lat: r.lat };
-  const origins = [player, ...questAnchors(q, player)].slice(0, 5);
-  let found: LngLat | null = null;
+  const anchors = questAnchors(q, player);
+  const origins = [player, ...anchors].slice(0, 7);
+  const accept = (c: LngLat) => questOkAt(q, c).catch(() => false);
+  let found: { center: LngLat; accuracy: number } | null = null;
+  let fallback: { center: LngLat; accuracy: number } | null = null;
+  const consider = (a: { center: LngLat; accuracy: number } | null) => {
+    if (a && (!fallback || a.accuracy > fallback.accuracy)) fallback = a;
+  };
   try {
     for (const [i, origin] of origins.entries()) {
       // right around the player's ring first (just the nearest area), then the quest's places
-      const accept = (c: LngLat) => questOkAt(q, c).catch(() => false);
       const res = await findClosestAnswer(origin, puzzle.radiusKm, puzzle.target, readBlock, accept, i === 0 ? 1 : 3);
       if (myAttempt !== attempt) return;
       if (res.answer) {
-        found = res.answer.center;
+        found = res.answer;
         break;
+      }
+      consider(res.best);
+    }
+    // last resort: a ring right on one of the quest's places
+    if (!found && !fallback) {
+      for (const a of anchors) {
+        if (!(await accept(a))) continue;
+        consider({ center: a, accuracy: accuracy(await populationInRing(a, puzzle.radiusKm), puzzle.target) });
+        if (myAttempt !== attempt) return;
       }
     }
   } catch (e) {
@@ -1141,14 +1191,16 @@ async function findQuestAnswer(r: Result, q: Quest, myAttempt: number, animate: 
   }
   if (myAttempt !== attempt) return;
   el.classList.remove("searching");
-  if (!found) {
-    el.textContent = t("questNoSample");
+  const shown = found ?? fallback;
+  if (!shown) {
+    el.hidden = true; // (only if the data couldn't load at all)
     return;
   }
-  const where = t("away", { km: fmt(haversineKm(player, found)) });
-  showPlace(el, found, myAttempt, `${t("questSample")}${where} · `);
-  setData("quest-answer", circleFeature(found, puzzle.radiusKm));
-  setCenters([...centerPoints.filter((p) => p.kind !== "quest"), { kind: "quest", at: found }]);
+  const where = t("away", { km: fmt(haversineKm(player, shown.center)) });
+  const label = found ? t("questSample") : t("questSampleNear", { acc: shown.accuracy.toFixed(0) });
+  showPlace(el, shown.center, myAttempt, `${label}${where} · `);
+  setData("quest-answer", circleFeature(shown.center, puzzle.radiusKm));
+  setCenters([...centerPoints.filter((p) => p.kind !== "quest"), { kind: "quest", at: shown.center }]);
   revealDone.then(() => {
     if (myAttempt === attempt) fitShown(animate ? 1200 : 0);
   });

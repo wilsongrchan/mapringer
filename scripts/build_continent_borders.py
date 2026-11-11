@@ -1,9 +1,9 @@
 """Build the lines where two continents meet on land, for continent quests.
 
 Traced from the land mask the quests are scored against (public/data/land.tif,
-1 arc-minute, value & 7 = continent), so a line is exactly where the quest
-switches continent (including the custom splits, e.g. Europe / Asia along the
-Urals). Only land-to-land borders are kept: coastlines are on the map anyway.
+1 arc-minute, value & 7 = continent) with the same corrections the game makes
+(src/continent-fixes.json: the Suez Canal, the Bosporus and Dardanelles, the
+Urals and Ural River), so a line is exactly where the quest switches continent. Only land-to-land borders are kept: coastlines are on the map anyway.
 
 Output: GeoJSON LineStrings with properties {"a": "<continent>", "b": "<continent>"}.
 
@@ -15,12 +15,34 @@ import json
 import sys
 from collections import defaultdict
 
+from pathlib import Path
+
 import numpy as np
 import rasterio
+from rasterio.features import rasterize
+from rasterio.transform import Affine
 
 NAMES = {1: "africa", 2: "asia", 3: "europe", 4: "northAmerica", 5: "southAmerica", 6: "oceania"}
 SIMPLIFY_DEG = 0.02
 MIN_LEN_DEG = 0.15  # drop tiny specks (single odd cells)
+
+
+CODES = {name: code for code, name in NAMES.items()}
+FIXES = Path(__file__).resolve().parent.parent / "src" / "continent-fixes.json"
+
+
+def apply_fixes(cont, t):
+    """Redraw the transcontinental splits along the real lines (same polygons as quests.ts)."""
+    for fix in json.load(open(FIXES))["fixes"]:
+        w, s, e, n = fix["box"]
+        c0, c1 = int((w - t.c) / t.a), int(np.ceil((e - t.c) / t.a))
+        r0, r1 = int((t.f - n) / -t.e), int(np.ceil((t.f - s) / -t.e))
+        sub = cont[r0:r1, c0:c1]
+        win = Affine(t.a, 0, t.c + c0 * t.a, 0, t.e, t.f + r0 * t.e)
+        inside = rasterize([({"type": "Polygon", "coordinates": [fix["poly"]]}, 1)], out_shape=sub.shape, transform=win, fill=0, dtype="uint8") > 0
+        movable = np.isin(sub, [CODES[c] for c in fix["from"]])
+        sub[movable & inside] = CODES[fix["inside"]]
+        sub[movable & ~inside] = CODES[fix["outside"]]
 
 
 def simplify(pts, tol):
@@ -53,6 +75,7 @@ def main(src, dst):
         v = f.read(1)
         t = f.transform
     cont = np.where(v > 0, v & 7, 0).astype(np.uint8)
+    apply_fixes(cont, t)
     rows, cols = cont.shape
     # edges between cells of different continents, keyed by continent pair;
     # each edge is a unit segment between grid nodes (col, row)
