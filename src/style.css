@@ -788,7 +788,7 @@ dialog {
   border: 6px solid var(--accent);
   border-radius: 50%;
   color: var(--accent);
-  text-shadow: 0 0 2px #fff, 0 0 4px #fff, 0 0 7px rgba(255, 255, 255, 0.9);
+  text-shadow: 0 0 3px rgba(255, 138, 80, 0.75), 0 0 7px rgba(228, 87, 46, 0.55);
   font-size: 9.5px;
   font-weight: 800;
   box-shadow: 0 0 10px rgba(228, 87, 46, 0.55);
@@ -876,6 +876,26 @@ dialog {
   stroke: var(--accent);
   stroke-width: 3;
   stroke-linejoin: round;
+  transition: fill 0.35s ease-out;
+}
+
+/* locking in: no outline or fill at first (just the centre), the trace draws
+   the ring, and it fills in when it closes (.ding) */
+.ring-overlay.locking #ring-overlay-path {
+  fill: rgba(228, 87, 46, 0);
+  stroke: transparent;
+}
+
+.ring-overlay.locking.ding #ring-overlay-path,
+.ring-overlay.settled #ring-overlay-path {
+  fill: rgba(228, 87, 46, 0.16);
+  stroke: transparent;
+}
+
+/* locked in: the traced line stays as the ring (also for a result reloaded later) */
+.ring-overlay.settled .ring-trace {
+  opacity: 1;
+  stroke-dashoffset: 0;
 }
 
 /* ---- lock-in: trace round the ring, a glow while counting, then a "ding" ---- */
@@ -887,12 +907,19 @@ dialog {
   opacity: 0;
 }
 
+/* the trace is the ring itself: the same orange and weight as the placed / result ring */
 .ring-trace {
-  stroke: #ff8a50;
-  stroke-width: 6;
+  stroke: var(--accent);
+  stroke-width: 3;
+  stroke-linecap: butt; /* (round ends would overlap into a knot where it starts and closes) */
   stroke-dasharray: 1;
   stroke-dashoffset: 1;
-  filter: drop-shadow(0 0 4px rgba(255, 138, 80, 0.9));
+}
+
+/* closed: one seamless ring, no start / end at all */
+.ring-overlay.ding .ring-trace,
+.ring-overlay.settled .ring-trace {
+  stroke-dasharray: none;
 }
 
 .ring-overlay.tracing .ring-trace {
@@ -929,7 +956,6 @@ dialog {
 }
 
 /* ding: the ring pulses and flashes */
-.ring-overlay.ding #ring-overlay-path,
 .ring-overlay.ding .ring-trace {
   animation: ring-ding 0.42s ease-out;
 }
@@ -938,18 +964,19 @@ dialog {
   stroke-dashoffset: 0;
 }
 
+/* a brief swell as it closes, back to the ring's own weight */
 @keyframes ring-ding {
   0% {
-    stroke-width: 6;
-    filter: drop-shadow(0 0 2px rgba(255, 138, 80, 0.9));
+    stroke-width: 3;
+    filter: none;
   }
   35% {
-    stroke-width: 11;
-    filter: drop-shadow(0 0 16px rgba(255, 160, 90, 1));
+    stroke-width: 7;
+    filter: drop-shadow(0 0 10px rgba(255, 140, 80, 0.9));
   }
   100% {
-    stroke-width: 6;
-    filter: drop-shadow(0 0 4px rgba(255, 138, 80, 0.9));
+    stroke-width: 3;
+    filter: none;
   }
 }
 
@@ -1500,8 +1527,8 @@ dialog.card {
   /* hollow: the map shows through, but the whole disc is still the button */
   background: transparent;
   color: var(--accent);
-  /* the label sits on the map, so give it a halo */
-  text-shadow: 0 0 3px #fff, 0 0 6px #fff, 0 0 10px rgba(255, 255, 255, 0.9);
+  /* the label glows orange, like the ring */
+  text-shadow: 0 0 4px rgba(255, 138, 80, 0.75), 0 0 10px rgba(228, 87, 46, 0.55);
   font-weight: 800;
   font-size: 14px;
   letter-spacing: 0.02em;
@@ -1511,11 +1538,6 @@ dialog.card {
   -webkit-tap-highlight-color: transparent;
 }
 
-@media (prefers-color-scheme: dark) {
-  .lock-ring {
-    text-shadow: 0 0 3px #000, 0 0 6px #000, 0 0 10px rgba(0, 0, 0, 0.9);
-  }
-}
 
 .lock-ring:hover {
   transform: scale(1.05);

@@ -522,7 +522,7 @@ const overlayExtras = [$("ring-trace"), $("ring-spin")];
 let lockingAt: LngLat | null = null;
 
 function drawOverlay() {
-  const c = lockingAt ?? map.getCenter();
+  const c = lockingAt ?? (locked ? { lng: locked.lng, lat: locked.lat } : map.getCenter());
   // start the path at the top of the ring, so the trace and the glow go round from twelve o'clock
   const pts = circleRing({ lng: c.lng, lat: c.lat }, puzzle.radiusKm, 96).map(([lng, lat]) => map.project([lng, lat]));
   const d = `M${pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join("L")}Z`;
@@ -551,6 +551,8 @@ async function lockAnimation(center: LngLat, ready: Promise<unknown>) {
   lockingAt = center;
   setInteractive(false);
   ov.classList.remove("tracing", "waiting", "ding");
+  // only the centre shows at first: the ring is drawn by the trace
+  ov.classList.add("locking");
   let isReady = false;
   ready.then(
     () => (isReady = true),
@@ -577,7 +579,7 @@ async function lockAnimation(center: LngLat, ready: Promise<unknown>) {
     ov.classList.remove("waiting");
   }
 
-  // 4. ding
+  // 4. the ring closes: ding, and it fills in
   ov.classList.add("ding");
   chime();
   buzz(35);
@@ -587,7 +589,7 @@ async function lockAnimation(center: LngLat, ready: Promise<unknown>) {
 /** Forget any lock-in animation (a new ring, or a retry). */
 function clearLockAnimation() {
   lockingAt = null;
-  (overlay as unknown as HTMLElement).classList.remove("tracing", "waiting", "ding");
+  (overlay as unknown as HTMLElement).classList.remove("locking", "tracing", "waiting", "ding", "settled");
   setInteractive(true);
 }
 
@@ -621,14 +623,17 @@ function chime() {
   }
 }
 
+/**
+ * The player's ring is always the screen overlay (redrawn on every camera
+ * move): while placing it's the plain ring; once locked it keeps the glowing
+ * traced line and fill from the lock-in animation (.settled), so nothing
+ * swaps or flashes when the answer appears.
+ */
 function updateRing() {
-  overlay.style.display = locked && !holdOverlay ? "none" : "";
-  if (locked) {
-    setData("ring", circleFeature({ lng: locked.lng, lat: locked.lat }, puzzle.radiusKm));
-  } else {
-    setData("ring", EMPTY);
-    drawOverlay();
-  }
+  overlay.style.display = "";
+  (overlay as unknown as HTMLElement).classList.toggle("settled", !!locked);
+  setData("ring", EMPTY);
+  drawOverlay();
 }
 
 let answerData: Feature | typeof EMPTY = EMPTY;
@@ -784,10 +789,10 @@ map.once("load", () => {
 });
 
 map.on("move", () => {
-  if (!locked) drawOverlay();
+  drawOverlay();
 });
 map.on("resize", () => {
-  if (!locked) drawOverlay();
+  drawOverlay();
 });
 
 map.on("movestart", (e) => {
@@ -1078,7 +1083,6 @@ function renderGauge(r: Result, animate: boolean) {
 let revealed = false;
 
 /** Lift the fog: full-colour map with roads and labels once the ring is locked in. */
-let holdOverlay = false; // keep the screen-space ring drawn during the reveal wipe
 let revealDone: Promise<void> = Promise.resolve(); // camera moves wait for the wipe
 
 /** Lift the fog: full-colour map with roads and labels once the ring is locked in. */
@@ -1100,28 +1104,28 @@ function revealMap(r: Result, animate: boolean) {
  * then grow a soft-edged hole in the snapshot outward from the ring's centre.
  */
 async function revealWipe(at: { x: number; y: number }) {
+  await rippleTo(at, () => applyRevealStyle(map, LANG, gameLayers));
+  updateRing();
+}
+
+/**
+ * Change the map with a ripple: snapshot the current map, make the change
+ * underneath (`change` resolves once the new map has been handed over), then
+ * grow a soft-edged hole in the snapshot outward from `at`. Used for the
+ * answer reveal and for moving on to the next ring.
+ */
+async function rippleTo(at: { x: number; y: number }, change: () => Promise<unknown> | void) {
   const snap = $<HTMLCanvasElement>("reveal-snap");
-  const src = map.getCanvas();
-  snap.width = src.width;
-  snap.height = src.height;
-  // Without preserveDrawingBuffer the WebGL canvas can only be copied inside
-  // the frame that drew it, so grab it from a render event.
-  await new Promise<void>((resolve) => {
-    map.once("render", () => {
-      snap.getContext("2d")!.drawImage(src, 0, 0);
-      resolve();
-    });
-    map.triggerRepaint();
-  });
+  await snapshotTo(snap);
   setMask(snap, "none");
   snap.hidden = false;
-  holdOverlay = true;
   updateRing();
-  drawOverlay();
 
-  // wait for the colour map to draw, but not long: slow tiles can fill in as the wipe opens
+  // wait for the new map to draw, but not long: slow tiles can fill in as the ripple opens
   const timer = new Promise<void>((resolve) => setTimeout(resolve, 1200));
-  await Promise.race([applyRevealStyle(map, LANG, gameLayers), timer]);
+  const changed = Promise.resolve(change());
+  snap.hidden = false; // (a ring switch resets the snapshot; keep it up for the ripple)
+  await Promise.race([changed, timer]);
   await Promise.race([new Promise<void>((resolve) => map.once("idle", () => resolve())), timer]);
 
   const feather = 60;
@@ -1142,8 +1146,6 @@ async function revealWipe(at: { x: number; y: number }) {
   });
 
   snap.hidden = true;
-  holdOverlay = false;
-  updateRing();
 }
 
 function setMask(el: HTMLElement, mask: string) {
@@ -1426,23 +1428,72 @@ function resetPlay() {
   const want = STAGES[stage].map;
   if (difficulty !== want || revealed) {
     difficulty = want;
-    applyMapStyle(map, difficulty, LANG, gameLayers);
+    styleSwap = applyMapStyle(map, difficulty, LANG, gameLayers);
   }
   revealed = false;
-  holdOverlay = false;
   $("reveal-snap").hidden = true;
   refreshHints();
   updateRing();
 }
 
-/** Start ring `st` of the current day: zoom back out to the whole globe and place a new ring. */
-function startRing(st: Stage) {
-  stage = st;
-  puzzle = rings[st];
-  quest = questFor(puzzle);
-  renderPuzzle();
-  resetPlay();
-  map.easeTo({ zoom: wholeGlobeZoom(), duration: 900 });
+let styleSwap: Promise<void> = Promise.resolve(); // the last base-map switch (resetPlay)
+let switching = false;
+
+/**
+ * Start ring `st` of the current day: the results slide away, the camera
+ * flies back out to the whole globe, then the next ring's map fades in over
+ * the old one.
+ */
+async function startRing(st: Stage) {
+  if (switching) return;
+  switching = true;
+  const snap = $<HTMLCanvasElement>("reveal-snap");
+  try {
+    setInteractive(false);
+    attempt++; // drop the last ring's pending searches (they'd re-frame the map)
+    $("result-panel").hidden = true;
+    setResultLayout(false);
+    // (the layout padding changes next, and that would cut a camera move short)
+    await revealDone;
+    await sleep(30);
+    applyLayoutPadding();
+    // 1. back out to the globe (the rings shrink away with the map)
+    const FLY_MS = 1500;
+    map.flyTo({ zoom: wholeGlobeZoom(), duration: FLY_MS, curve: 1.3, essential: true });
+    await sleep(FLY_MS + 50);
+    // 2. the next ring's map ripples out from the centre, like the answer reveal
+    const c = map.project(map.getCenter());
+    await rippleTo({ x: c.x, y: c.y }, () => {
+      stage = st;
+      puzzle = rings[st];
+      quest = questFor(puzzle);
+      renderPuzzle();
+      resetPlay();
+      return styleSwap;
+    });
+  } catch (e) {
+    console.error(e);
+  } finally {
+    snap.hidden = true;
+    switching = false;
+    setInteractive(true);
+  }
+}
+
+/** Copy the map's current frame onto a canvas (for the reveal wipe and ring switches). */
+function snapshotTo(snap: HTMLCanvasElement): Promise<void> {
+  const src = map.getCanvas();
+  snap.width = src.width;
+  snap.height = src.height;
+  // Without preserveDrawingBuffer the WebGL canvas can only be copied inside
+  // the frame that drew it, so grab it from a render event.
+  return new Promise<void>((resolve) => {
+    map.once("render", () => {
+      snap.getContext("2d")!.drawImage(src, 0, 0);
+      resolve();
+    });
+    map.triggerRepaint();
+  });
 }
 
 $("next-btn").addEventListener("click", () => {
