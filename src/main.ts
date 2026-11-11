@@ -1461,6 +1461,15 @@ async function startRing(st: Stage) {
     const FLY_MS = 1500;
     map.flyTo({ zoom: wholeGlobeZoom(), duration: FLY_MS, curve: 1.3, essential: true });
     await sleep(FLY_MS + 50);
+    // clear the last ring's rings and dots (mine, the green answer, the gold one)
+    // and let the map redraw, so only the new ring's dot shows from here on
+    setData("answer", EMPTY);
+    setData("quest-answer", EMPTY);
+    setCenters([]);
+    overlay.style.display = "none";
+    await Promise.race([new Promise<void>((r) => map.once("idle", () => r())), sleep(600)]);
+    map.triggerRepaint();
+    await Promise.race([new Promise<void>((r) => map.once("idle", () => r())), sleep(400)]);
     // 2. the next ring's map ripples out from the centre, like the answer reveal
     const c = map.project(map.getCenter());
     await rippleTo({ x: c.x, y: c.y }, () => {
