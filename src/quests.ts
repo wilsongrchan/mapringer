@@ -33,7 +33,7 @@ export type Quest =
   | { kind: "high"; m: number }
   | { kind: "touchSea"; sea: string }
   | { kind: "northOf"; lat: number }
-  | { kind: "southOf"; lat: number }
+  | { kind: "southOf"; lat: number } // (negative: degrees south)
   | { kind: "centreAtSea" }
   | { kind: "primeMeridian" }
   | { kind: "landlocked" }
@@ -141,7 +141,7 @@ export function questFor(p: Puzzle): Quest | null {
           CONTINENT_LIST.map((continent): Quest => ({ kind: "continent", continent })),
           [{ kind: "west" }, { kind: "east" }],
           [{ kind: "northOfCancer" }, { kind: "tropics" }],
-          [{ kind: "northOf", lat: 45 }, { kind: "southOf", lat: 30 }],
+          [{ kind: "northOf", lat: 45 }, { kind: "southOf", lat: -30 }],
           [{ kind: "high", m: HIGH_EASY_M }],
           COUNTRIES.map((c): Quest => ({ kind: "country", country: c.id })),
           seas(["pacific", "atlantic", "indian", "mediterranean"]),
@@ -152,7 +152,7 @@ export function questFor(p: Puzzle): Quest | null {
           CITIES.map((c): Quest => ({ kind: "nearCity", city: c.id, km: NEAR_CITY_KM })),
           COUNTRIES.map((c): Quest => ({ kind: "country", country: c.id })),
           [{ kind: "twoContinents" }],
-          [{ kind: "southOfCapricorn" }, { kind: "southOf", lat: 35 }],
+          [{ kind: "southOfCapricorn" }, { kind: "southOf", lat: -35 }],
           [{ kind: "northOf", lat: 50 }, { kind: "northOf", lat: 55 }],
           [{ kind: "high", m: HIGH_HARD_M }],
           p.radiusKm <= 50 ? [{ kind: "islandsOnly" }] : [],

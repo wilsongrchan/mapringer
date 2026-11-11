@@ -426,6 +426,21 @@ describe.skipIf(!existsSync(LAND))("side quests on the real land mask", async ()
       }
   });
 
+  it("latitude quests point the right way (south ones are negative) and have their caps", async () => {
+    const { feasible } = await import("../src/quests");
+    const seen = new Map<string, number>();
+    for (let n = 1; n < 3000; n++)
+      for (const st of [1, 2] as Stage[]) {
+        const q = questFor(ringFor(n, st))!;
+        if (q.kind === "northOf" || q.kind === "southOf") seen.set(q.kind, q.lat);
+        if (q.kind === "southOf") expect(q.lat).toBeLessThan(0);
+        if (q.kind === "northOf") expect(q.lat).toBeGreaterThan(0);
+      }
+    expect([...seen.keys()].sort()).toEqual(["northOf", "southOf"]);
+    // a huge crowd south of 35°S can't happen: the cap must rule it out
+    expect(feasible({ kind: "southOf", lat: -35 }, { number: 1, stage: 2, radiusKm: 50, target: 20_000_000 })).toBe(false);
+  });
+
   it("new quests: latitudes, the prime meridian, centre at sea, touching a sea", () => {
     const none = { center: 0, touchesSea: false, touchesMainland: false, touchesIsland: false, seaShare: 0, continents: new Set<never>(), seas: new Set<number>() };
     expect(questDone({ kind: "northOf", lat: 45 }, none, { lat: 48.86, lng: 2.35 }, 30)).toBe(true); // Paris
