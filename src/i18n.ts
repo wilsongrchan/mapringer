@@ -86,7 +86,7 @@ const en = {
   ringN: (v: Vars) => `Ring ${v.n}`,
 
   sideQuest: "Quest",
-  questContinent: (v: Vars) => `Centre your ring in ${v.continent}.`,
+  questContinent: (v: Vars) => `Centre your ring on land in ${v.continent} (the sea around it doesn't count).`,
   questLandlocked: "Don't let your ring touch the sea.",
   questIslands: "Islands only: your ring can touch islands, but not the big continents.",
   questTwoContinents: "Make your ring touch two continents.",
@@ -226,7 +226,7 @@ const zh: Record<Key, Entry> = {
   ringN: (v) => `第 ${v.n} 圈`,
 
   sideQuest: "任務",
-  questContinent: (v) => `把圈的中心放在${v.continent}。`,
+  questContinent: (v) => `把圈的中心放在${v.continent}的陸地上（附近海域不計）。`,
   questLandlocked: "圈內不可以碰到海。",
   questIslands: "只可碰到島嶼，不可碰到大洲本土。",
   questTwoContinents: "讓圈同時碰到兩個大洲。",
