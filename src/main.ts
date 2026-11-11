@@ -10,7 +10,7 @@ import { applyMapStyle, applyRevealStyle, DIFFICULTIES, GLOBE, prefetchStyles, t
 import { circleRing, haversineKm, type LngLat } from "./geo";
 import { coords, placeName } from "./places";
 import { CITIES } from "./cities";
-import { highestInRing } from "./elevation";
+import { highestInRing, TILE_URL as ELEVATION_TILES } from "./elevation";
 import { CONTINENT_VIEW, COUNTRIES, countryAt, GEOMETRY_ONLY, questAnchors, questDone, questFor, surveyRing, TROPIC_LAT, type Continent, type Quest } from "./quests";
 import { populationInRing, preloadPopulation, readBlock, readCountryBlock, readLandBlock } from "./population";
 import {
@@ -140,6 +140,8 @@ function fitOneLine(el: HTMLElement, maxPx: number, minPx = 11) {
 const fitChallenge = () => fitOneLine($("challenge-line"), matchMedia("(min-width: 800px)").matches ? 17 : 15);
 
 let quest: Quest | null = questFor(puzzle);
+/** The rings' centre dots on the map (see setCenters): mine, the answer, the quest's gold ring. */
+let centerPoints: { kind: CenterKind; at: LngLat }[] = [];
 
 const QUEST_TEXT = {
   equator: "questEquator",
@@ -226,8 +228,12 @@ function questAreaFilter(): ((f: AreaFC["features"][number]) => boolean) | null 
   return null;
 }
 
+/** Shaded relief on the map, for height quests only. */
+const showRelief = () => showHints() && quest?.kind === "high";
+
 /** Redraw the quest hints for the current quest, difficulty and lock state. */
 function refreshHints() {
+  if (map.getLayer("quest-hillshade")) map.setLayoutProperty("quest-hillshade", "visibility", showRelief() ? "visible" : "none");
   const myQuest = quest;
   borderLines = [];
   if (showHints() && quest && (quest.kind === "continent" || quest.kind === "twoContinents")) {
@@ -323,6 +329,11 @@ function questFocus(): maplibregl.LngLatBounds | null {
       const m = Math.abs(here.lng) < 90 ? 0 : here.lng > 0 ? 180 : -180;
       return around(m, Math.max(-50, Math.min(50, here.lat)), 2200);
     }
+    case "landlocked":
+    case "islandsOnly":
+    case "high":
+      // no zooming help for these: finding the place is the quest
+      return null;
     case "twoContinents": {
       // the continent border nearest the map's centre
       let best: { b: maplibregl.LngLatBounds; d: number } | null = null;
@@ -342,9 +353,16 @@ function questFocus(): maplibregl.LngLatBounds | null {
       break;
     }
   }
-  // height, islands only, no sea…: the nearest place that suits the quest
-  const near = questAnchors(quest, here)[0];
-  return near ? around(near.lng, near.lat, 250) : null;
+  return null;
+}
+
+/** Only quests that have somewhere to show look tappable ("Show on map ›"). */
+function syncQuestGo() {
+  const can = !!quest && (centerPoints.some((p) => p.kind === "quest") || !["landlocked", "islandsOnly", "high"].includes(quest.kind));
+  $("quest").classList.toggle("can-go", can);
+  if (can) $("quest").setAttribute("role", "button");
+  else $("quest").removeAttribute("role");
+  $("quest").tabIndex = can ? 0 : -1;
 }
 
 function goToQuest() {
@@ -367,6 +385,7 @@ $("quest").addEventListener("keydown", (e) => {
 
 function renderQuest() {
   refreshHints();
+  syncQuestGo();
   $("quest").hidden = !quest; // ring 1 has no quest
   if (quest)
     $("quest-text").replaceChildren(
@@ -455,9 +474,9 @@ let centerData: PointFC = { type: "FeatureCollection", features: [] };
 
 /** Centre dots for the locked-in ring, the answer ring and the quest's sample ring. */
 type CenterKind = "mine" | "answer" | "quest";
-let centerPoints: { kind: CenterKind; at: LngLat }[] = [];
 function setCenters(points: { kind: CenterKind; at: LngLat }[]) {
   centerPoints = points;
+  syncQuestGo();
   centerData = {
     type: "FeatureCollection",
     features: points.map((p) => ({
@@ -479,9 +498,30 @@ const gameLayers: GameLayers = () => ({
     "quest-answer": { type: "geojson", data: questAnswerData },
     "quest-lines": { type: "geojson", data: questLines() },
     "quest-areas": { type: "geojson", data: areasData },
+    // height quests: shaded relief from the same elevation tiles the quest is judged on
+    "quest-dem": {
+      type: "raster-dem",
+      tiles: [ELEVATION_TILES],
+      encoding: "terrarium",
+      tileSize: 256,
+      maxzoom: 12,
+      attribution: "Elevation: Mapzen Terrain Tiles",
+    },
     centers: { type: "geojson", data: centerData },
   },
   layers: [
+    {
+      id: "quest-hillshade",
+      type: "hillshade",
+      source: "quest-dem",
+      layout: { visibility: showRelief() ? "visible" : "none" },
+      paint: {
+        "hillshade-exaggeration": 0.55,
+        "hillshade-shadow-color": "#4a3b2a",
+        "hillshade-highlight-color": "#ffffff",
+        "hillshade-accent-color": "#6b5330",
+      },
+    },
     {
       id: "quest-area-fill",
       type: "fill",

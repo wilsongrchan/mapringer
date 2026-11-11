@@ -927,18 +927,22 @@ dialog {
 }
 
 /* the whole quest box is a button: show what it's about on the map */
-.quest {
+.quest.can-go {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   transition: background-color 0.15s;
 }
 
-.quest:hover {
+.quest.can-go:hover {
   background: rgba(245, 183, 0, 0.2);
 }
 
-.quest:active {
+.quest.can-go:active {
   background: rgba(245, 183, 0, 0.28);
+}
+
+.quest:not(.can-go) .quest-go {
+  display: none;
 }
 
 .quest-go {

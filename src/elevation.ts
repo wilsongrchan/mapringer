@@ -6,7 +6,7 @@ import { haversineKm, KM_PER_DEG, type LngLat } from "./geo";
  * only the few tiles under the ring, at a zoom that suits its size.
  * Nothing is drawn on the map.
  */
-const TILE_URL = "https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png";
+export const TILE_URL = "https://elevation-tiles-prod.s3.amazonaws.com/terrarium/{z}/{x}/{y}.png";
 const EARTH_KM = 40_075;
 const MAX_LAT = 85;
 
