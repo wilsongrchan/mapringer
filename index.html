@@ -24,7 +24,12 @@
   <body>
     <div id="map"></div>
     <canvas class="reveal-snap" id="reveal-snap" hidden aria-hidden="true"></canvas>
-    <svg class="ring-overlay" id="ring-overlay" aria-hidden="true"><path id="ring-overlay-path" /></svg>
+    <!-- the ring while placing; on lock-in a line traces round it, a glow circles while counting, then it "dings" -->
+    <svg class="ring-overlay" id="ring-overlay" aria-hidden="true">
+      <path id="ring-overlay-path" />
+      <path class="ring-trace" id="ring-trace" pathLength="1" />
+      <path class="ring-spin" id="ring-spin" pathLength="1" />
+    </svg>
 
     <header class="topbar">
       <div class="brand">

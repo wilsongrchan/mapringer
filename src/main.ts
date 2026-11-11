@@ -197,7 +197,37 @@ function meridian(lng: number, name: string) {
 }
 
 /** Where two continents meet on land (scripts/build_continent_borders.py), for continent quests. */
-type BorderFC = { type: "FeatureCollection"; features: { type: "Feature"; properties: { a: string; b: string; name?: string }; geometry: object }[] };
+type BorderFC = {
+  type: "FeatureCollection";
+  features: { type: "Feature"; properties: { a?: string; b?: string; name?: string; first?: string; second?: string; orient?: string }; geometry: { type: string; coordinates: number[] | number[][] } }[];
+};
+
+/**
+ * Labels beside the quest's lines saying which side is which: "← Western
+ * Hemisphere | Eastern Hemisphere →" along the meridians, and the continent
+ * on each side of a continent border.
+ */
+type SideFC = { type: "FeatureCollection"; features: { type: "Feature"; properties: { text: string; anchor: string; offset: [number, number] }; geometry: { type: "Point"; coordinates: [number, number] } }[] };
+let sidesData: SideFC = { type: "FeatureCollection", features: [] };
+function sidePair(at: [number, number], first: string, second: string, orient: "ns" | "ew"): SideFC["features"] {
+  const pt = (text: string, anchor: string, offset: [number, number]) => ({ type: "Feature" as const, properties: { text, anchor, offset }, geometry: { type: "Point" as const, coordinates: at } });
+  return orient === "ns"
+    ? [pt(`← ${first}`, "right", [-0.6, 0]), pt(`${second} →`, "left", [0.6, 0])]
+    : [pt(`↑ ${first}`, "bottom", [0, -0.5]), pt(`↓ ${second}`, "top", [0, 0.5])];
+}
+function hemisphereSides(): SideFC["features"] {
+  const out: SideFC["features"] = [];
+  for (const lat of [-45, -25, -5, 15, 35, 55]) {
+    out.push(...sidePair([0, lat], t("hemiWest"), t("hemiEast"), "ns"));
+    // at 180° the sides swap: the Eastern Hemisphere is to the west of it
+    out.push(...sidePair([180, lat], t("hemiEast"), t("hemiWest"), "ns"));
+  }
+  return out;
+}
+function setSides(features: SideFC["features"]) {
+  sidesData = { type: "FeatureCollection", features };
+  (map.getSource("quest-sides") as maplibregl.GeoJSONSource | undefined)?.setData(sidesData);
+}
 let bordersGeo: Promise<BorderFC> | null = null;
 let borderLines: BorderFC["features"] = [];
 
@@ -251,16 +281,22 @@ function refreshHints() {
   if (map.getLayer("quest-hillshade")) map.setLayoutProperty("quest-hillshade", "visibility", showRelief() ? "visible" : "none");
   const myQuest = quest;
   borderLines = [];
+  setSides(showHints() && quest && (quest.kind === "west" || quest.kind === "east") ? hemisphereSides() : []);
   if (showHints() && quest && (quest.kind === "continent" || quest.kind === "twoContinents")) {
     const only = quest.kind === "continent" ? quest.continent : null;
     bordersGeo ??= fetch(`${import.meta.env.BASE_URL}hints/continent-borders.geojson`).then((r) => r.json() as Promise<BorderFC>);
     bordersGeo
       .then((fc) => {
         if (quest !== myQuest) return;
-        borderLines = fc.features
-          .filter((f) => !only || f.properties.a === only || f.properties.b === only)
-          .map((f) => ({ ...f, properties: { ...f.properties, name: `${t(f.properties.a as Continent)} · ${t(f.properties.b as Continent)}` } }));
+        const touches = (a?: string, b?: string) => !only || a === only || b === only;
+        // the lines (unlabelled: the names go on each side of them instead)
+        borderLines = fc.features.filter((f) => f.geometry.type === "LineString" && touches(f.properties.a, f.properties.b));
         (map.getSource("quest-lines") as maplibregl.GeoJSONSource | undefined)?.setData(questLines());
+        setSides(
+          fc.features
+            .filter((f) => f.geometry.type === "Point" && touches(f.properties.first, f.properties.second))
+            .flatMap((f) => sidePair(f.geometry.coordinates as [number, number], t(f.properties.first as Continent), t(f.properties.second as Continent), f.properties.orient as "ns" | "ew")),
+        );
       })
       .catch(() => {
         bordersGeo = null; // a hint is optional; try again next time
@@ -365,7 +401,7 @@ function questFocus(): maplibregl.LngLatBounds | null {
       // the continent border nearest the map's centre
       let best: { b: maplibregl.LngLatBounds; d: number } | null = null;
       for (const f of borderLines) {
-        const coords = (f.geometry as { coordinates: [number, number][] }).coordinates;
+        const coords = (f.geometry as unknown as { coordinates: [number, number][] }).coordinates;
         const d = Math.min(...coords.map(([lng, lat]) => haversineKm(here, { lng, lat })));
         if (!best || d < best.d) {
           const b = new maplibregl.LngLatBounds();
@@ -481,10 +517,108 @@ function setData(source: string, data: Feature | typeof EMPTY) {
 const overlay = document.getElementById("ring-overlay") as unknown as SVGSVGElement;
 const overlayPath = document.getElementById("ring-overlay-path") as unknown as SVGPathElement;
 
+const overlayExtras = [$("ring-trace"), $("ring-spin")];
+/** While locking in, the ring stays where it was locked (the map glides to frame it). */
+let lockingAt: LngLat | null = null;
+
 function drawOverlay() {
-  const c = map.getCenter();
+  const c = lockingAt ?? map.getCenter();
+  // start the path at the top of the ring, so the trace and the glow go round from twelve o'clock
   const pts = circleRing({ lng: c.lng, lat: c.lat }, puzzle.radiusKm, 96).map(([lng, lat]) => map.project([lng, lat]));
-  overlayPath.setAttribute("d", `M${pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join("L")}Z`);
+  const d = `M${pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join("L")}Z`;
+  overlayPath.setAttribute("d", d);
+  for (const el of overlayExtras) el.setAttribute("d", d);
+}
+
+/** Map gestures on / off (off while the lock-in animation plays). */
+function setInteractive(on: boolean) {
+  for (const h of [map.dragPan, map.scrollZoom, map.boxZoom, map.doubleClickZoom, map.keyboard, map.touchZoomRotate]) {
+    if (on) h.enable();
+    else h.disable();
+  }
+  if (on) map.touchZoomRotate.disableRotation();
+}
+
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+/**
+ * The lock-in moment: glide to frame the ring, trace a bright line round it,
+ * keep a glow circling while the count (or the quest check) is still loading,
+ * then "ding" (a pulse, a soft chime, a buzz) before the answer is revealed.
+ */
+async function lockAnimation(center: LngLat, ready: Promise<unknown>) {
+  const ov = overlay as unknown as HTMLElement;
+  lockingAt = center;
+  setInteractive(false);
+  ov.classList.remove("tracing", "waiting", "ding");
+  let isReady = false;
+  ready.then(
+    () => (isReady = true),
+    () => (isReady = true),
+  );
+
+  // 1. centre the ring and frame it
+  const pad = { top: $("challenge").getBoundingClientRect().bottom + 24, bottom: 140, left: 32, right: 32 };
+  const cam = map.cameraForBounds(boundsOf([{ center, radiusKm: puzzle.radiusKm * 1.15 }]), { padding: pad });
+  const zoom = cam?.zoom ?? map.getZoom();
+  map.easeTo({ center: [center.lng, center.lat], zoom, duration: 850, easing: (t) => (t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2) });
+  await sleep(850);
+  drawOverlay();
+
+  // 2. a line traces round the ring
+  void ov.getBoundingClientRect(); // restart the CSS animations
+  ov.classList.add("tracing");
+  await sleep(1000);
+
+  // 3. still counting? a glow keeps going round until it's ready
+  if (!isReady) {
+    ov.classList.add("waiting");
+    await ready.catch(() => {});
+    ov.classList.remove("waiting");
+  }
+
+  // 4. ding
+  ov.classList.add("ding");
+  chime();
+  buzz(35);
+  await sleep(420);
+}
+
+/** Forget any lock-in animation (a new ring, or a retry). */
+function clearLockAnimation() {
+  lockingAt = null;
+  (overlay as unknown as HTMLElement).classList.remove("tracing", "waiting", "ding");
+  setInteractive(true);
+}
+
+/** A soft two-note chime (Web Audio; made on the lock-in tap so phones allow it). */
+let audio: AudioContext | null = null;
+function primeAudio() {
+  try {
+    audio ??= new AudioContext();
+    if (audio.state === "suspended") void audio.resume();
+  } catch {
+    audio = null; // no sound, no problem
+  }
+}
+function chime() {
+  if (!audio) return;
+  const now = audio.currentTime;
+  for (const [freq, delay, level] of [
+    [1318.5, 0, 0.09], // E6
+    [1975.5, 0.09, 0.06], // B6
+  ] as const) {
+    const osc = audio.createOscillator();
+    const gain = audio.createGain();
+    osc.type = "sine";
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0, now + delay);
+    gain.gain.linearRampToValueAtTime(level, now + delay + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + delay + 0.9);
+    osc.connect(gain).connect(audio.destination);
+    osc.start(now + delay);
+    osc.stop(now + delay + 1);
+  }
 }
 
 function updateRing() {
@@ -529,6 +663,7 @@ const gameLayers: GameLayers = () => ({
     "quest-answer": { type: "geojson", data: questAnswerData },
     "quest-lines": { type: "geojson", data: questLines() },
     "quest-areas": { type: "geojson", data: areasData },
+    "quest-sides": { type: "geojson", data: sidesData },
     // height quests: shaded relief from the same elevation tiles the quest is judged on
     "quest-dem": {
       type: "raster-dem",
@@ -605,6 +740,19 @@ const gameLayers: GameLayers = () => ({
       paint: { "text-color": "#8a6400", "text-halo-color": "rgba(255,255,255,0.95)", "text-halo-width": 1.6 },
     },
     {
+      id: "quest-side-label",
+      type: "symbol",
+      source: "quest-sides",
+      layout: {
+        "text-field": ["get", "text"],
+        "text-font": ["Noto Sans Bold"],
+        "text-size": 12,
+        "text-anchor": ["get", "anchor"] as unknown as maplibregl.DataDrivenPropertyValueSpecification<"right">,
+        "text-offset": ["get", "offset"] as unknown as maplibregl.DataDrivenPropertyValueSpecification<[number, number]>,
+      },
+      paint: { "text-color": "#8a6400", "text-halo-color": "rgba(255,255,255,0.95)", "text-halo-width": 1.6 },
+    },
+    {
       id: "centers",
       type: "circle",
       source: "centers",
@@ -627,6 +775,7 @@ map.on("style.load", () => {
   // hint data that arrived while this style was loading went to the old one: send it again
   (map.getSource("quest-lines") as maplibregl.GeoJSONSource | undefined)?.setData(questLines());
   (map.getSource("quest-areas") as maplibregl.GeoJSONSource | undefined)?.setData(areasData);
+  (map.getSource("quest-sides") as maplibregl.GeoJSONSource | undefined)?.setData(sidesData);
   updateRing();
 });
 
@@ -657,10 +806,11 @@ lockBtn.addEventListener("click", async () => {
   lockBtn.classList.add("counting");
   lockBtn.setAttribute("aria-label", t("counting"));
   buzz(25); // a little tap on phones that support it
+  primeAudio();
   try {
     let seaShare: number | undefined;
     let highest: number | null = null;
-    const [population, done] = await Promise.all([
+    const counting = Promise.all([
       populationInRing(center, puzzle.radiusKm),
       // the side quest is a bonus: if the land data can't load, it just doesn't count
       Promise.all([
@@ -680,6 +830,9 @@ lockBtn.addEventListener("click", async () => {
         })
         .catch(() => false),
     ]);
+    // the animation runs while the count loads, and waits for it
+    await lockAnimation(center, counting);
+    const [population, done] = await counting;
     if (myAttempt !== attempt) return;
     const s = score(population, puzzle.target);
     const g = gradeRing(stage, s, !!quest, done);
@@ -702,9 +855,12 @@ lockBtn.addEventListener("click", async () => {
     locked = result;
     // a happy buzz for a bullseye, a short one otherwise
     buzz(result.grade === "bullseye" ? [40, 70, 40, 70, 90] : result.points > 0 ? [30, 60, 30] : 60);
+    lockingAt = null;
+    setInteractive(true);
     showResult(result, true);
   } catch (e) {
     console.error(e);
+    clearLockAnimation();
     toast(t("loadFailed"));
     lockBtn.disabled = false;
     lockBtn.classList.remove("counting");
@@ -1251,6 +1407,7 @@ function renderDayEnd() {
 function resetPlay() {
   attempt++;
   locked = null;
+  clearLockAnimation();
   $("result-panel").hidden = true;
   $("play-panel").hidden = false;
   setResultLayout(false);

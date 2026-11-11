@@ -45,6 +45,49 @@ def apply_fixes(cont, t):
         sub[movable & ~inside] = CODES[fix["outside"]]
 
 
+def cont_at(cont, t, lng, lat):
+    c = int((lng - t.c) / t.a)
+    r = int((lat - t.f) / t.e)
+    if 0 <= r < cont.shape[0] and 0 <= c < cont.shape[1]:
+        return int(cont[r, c])
+    return 0
+
+
+def side_labels(pts, length, cont, t):
+    """Points along a border saying which continent is on which side.
+
+    Each point has `first` (the continent to the west, or north) and `second`
+    (east, or south), and `orient`: "ns" for a line running north-south (so
+    the names go left / right of it) or "ew" (above / below)."""
+    out = []
+    a = np.asarray(pts)
+    seg = np.hypot(*np.diff(a, axis=0).T)
+    cum = np.concatenate([[0], np.cumsum(seg)])
+    fracs = [0.5] if length < 8 else [0.2, 0.5, 0.8]
+    for f in fracs:
+        target = f * cum[-1]
+        i = min(len(seg) - 1, int(np.searchsorted(cum, target) - 1))
+        i = max(i, 0)
+        p0, p1 = a[i], a[i + 1]
+        u = (target - cum[i]) / seg[i] if seg[i] else 0
+        mid = p0 + (p1 - p0) * u
+        d = (p1 - p0) / (seg[i] or 1)
+        ns = abs(d[1]) >= abs(d[0])
+        for off in (0.15, 0.3, 0.5, 0.8):
+            if ns:  # west / east of it
+                west, east = cont_at(cont, t, mid[0] - off, mid[1]), cont_at(cont, t, mid[0] + off, mid[1])
+            else:  # north / south of it
+                west, east = cont_at(cont, t, mid[0], mid[1] + off), cont_at(cont, t, mid[0], mid[1] - off)
+            if west and east and west != east:
+                out.append({
+                    "type": "Feature",
+                    "properties": {"first": NAMES[west], "second": NAMES[east], "orient": "ns" if ns else "ew"},
+                    "geometry": {"type": "Point", "coordinates": [round(float(mid[0]), 3), round(float(mid[1]), 3)]},
+                })
+                break
+    return out
+
+
 def simplify(pts, tol):
     """Douglas-Peucker on a list of (x, y)."""
     if len(pts) < 3:
@@ -128,11 +171,15 @@ def main(src, dst):
                     "properties": {"a": NAMES[x], "b": NAMES[y]},
                     "geometry": {"type": "LineString", "coordinates": [[round(px, 3), round(py, 3)] for px, py in pts]},
                 })
+                features.extend(side_labels(pts, length, cont, t))
     with open(dst, "w") as f:
         json.dump({"type": "FeatureCollection", "features": features}, f, separators=(",", ":"))
     pairs = defaultdict(int)
     for ft in features:
-        pairs[(ft["properties"]["a"], ft["properties"]["b"])] += 1
+        if ft["geometry"]["type"] == "LineString":
+            pairs[(ft["properties"]["a"], ft["properties"]["b"])] += 1
+        else:
+            pairs["labels"] += 1
     print(len(features), "lines", dict(pairs))
 
 
