@@ -11,7 +11,7 @@ import { circleRing, haversineKm, type LngLat } from "./geo";
 import { coords, placeName } from "./places";
 import { CITIES } from "./cities";
 import { highestInRing } from "./elevation";
-import { COUNTRIES, countryAt, GEOMETRY_ONLY, questAnchors, questDone, questFor, surveyRing, TROPIC_LAT, type Quest } from "./quests";
+import { COUNTRIES, countryAt, GEOMETRY_ONLY, questAnchors, questDone, questFor, surveyRing, TROPIC_LAT, type Continent, type Quest } from "./quests";
 import { populationInRing, preloadPopulation, readBlock, readCountryBlock, readLandBlock } from "./population";
 import {
   accuracy,
@@ -83,20 +83,9 @@ let puzzle: Puzzle = rings[stage];
 let practice = carriedTest?.practice ?? startRandom; // true once we've moved on to random days
 const dayDone = () => results.every(Boolean);
 
-const COLOR = { ring: "#e4572e", good: "#2a9d8f", quest: "#c48a00" };
-/** Side-quest hint colours, one per continent (so where two meet is easy to see). */
-const CONTINENT_COLOR = [
-  "match",
-  ["get", "continent"],
-  "africa", "#d98e04",
-  "asia", "#c8414b",
-  "europe", "#3d7cc9",
-  "northAmerica", "#8a5cc2",
-  "southAmerica", "#2f9e44",
-  "oceania", "#0f9e99",
-  "country", "#e07a00",
-  "#888888",
-] as unknown as maplibregl.ExpressionSpecification;
+/** One bright gold for everything quest-related: hint lines, borders, the quest's sample ring. */
+const QUEST_GOLD = "#f5b700";
+const COLOR = { ring: "#e4572e", good: "#2a9d8f", quest: QUEST_GOLD };
 
 preloadPopulation();
 
@@ -196,8 +185,17 @@ function meridian(lng: number, name: string) {
   return { type: "Feature" as const, properties: { name }, geometry: { type: "LineString" as const, coordinates } };
 }
 
-/** Map lines that go with the day's quest (equator, tropics, meridians). */
+/** Where two continents meet on land (scripts/build_continent_borders.py), for continent quests. */
+type BorderFC = { type: "FeatureCollection"; features: { type: "Feature"; properties: { a: string; b: string; name?: string }; geometry: object }[] };
+let bordersGeo: Promise<BorderFC> | null = null;
+let borderLines: BorderFC["features"] = [];
+
+/** Map lines that go with the day's quest (equator, tropics, meridians, continent borders). */
 function questLines() {
+  return { type: "FeatureCollection" as const, features: [...parallelLines().features, ...borderLines] };
+}
+
+function parallelLines() {
   const lines = !showHints() || !quest
     ? []
     : quest.kind === "equator"
@@ -217,26 +215,38 @@ function questLines() {
 type AreaFC = { type: "FeatureCollection"; features: { type: "Feature"; properties: { continent: string; island: boolean }; geometry: object }[] };
 const NO_AREAS: AreaFC = { type: "FeatureCollection", features: [] };
 let areasData: AreaFC = NO_AREAS;
-let continentsGeo: Promise<AreaFC> | null = null; // built from the land mask by scripts/build_hints.py
 
-/** Which continent / island shapes the current quest's hint shows. */
+/** Whether the current quest's hint draws an outlined area (a country, or the circle round a city). */
 function questAreaFilter(): ((f: AreaFC["features"][number]) => boolean) | null {
   if (!showHints() || !quest) return null;
   if (quest.kind === "nearCity") return () => true;
-  if (quest.kind === "continent") {
-    const c: string = quest.continent;
-    return (f) => f.properties.continent === c;
-  }
-  if (quest.kind === "twoContinents" || quest.kind === "country") return () => true;
+  if (quest.kind === "country") return () => true;
+  // continent quests: just the lines where continents meet (see refreshHints)
   // islands-only: no shading of where the big continents are
   return null;
 }
 
 /** Redraw the quest hints for the current quest, difficulty and lock state. */
 function refreshHints() {
+  const myQuest = quest;
+  borderLines = [];
+  if (showHints() && quest && (quest.kind === "continent" || quest.kind === "twoContinents")) {
+    const only = quest.kind === "continent" ? quest.continent : null;
+    bordersGeo ??= fetch(`${import.meta.env.BASE_URL}hints/continent-borders.geojson`).then((r) => r.json() as Promise<BorderFC>);
+    bordersGeo
+      .then((fc) => {
+        if (quest !== myQuest) return;
+        borderLines = fc.features
+          .filter((f) => !only || f.properties.a === only || f.properties.b === only)
+          .map((f) => ({ ...f, properties: { ...f.properties, name: `${t(f.properties.a as Continent)} · ${t(f.properties.b as Continent)}` } }));
+        (map.getSource("quest-lines") as maplibregl.GeoJSONSource | undefined)?.setData(questLines());
+      })
+      .catch(() => {
+        bordersGeo = null; // a hint is optional; try again next time
+      });
+  }
   (map.getSource("quest-lines") as maplibregl.GeoJSONSource | undefined)?.setData(questLines());
   const keep = questAreaFilter();
-  const myQuest = quest;
   const apply = (fc: AreaFC) => {
     areasData = fc;
     (map.getSource("quest-areas") as maplibregl.GeoJSONSource | undefined)?.setData(fc);
@@ -260,15 +270,7 @@ function refreshHints() {
       .catch(() => {}); // a hint is optional
     return;
   }
-  continentsGeo ??= fetch(`${import.meta.env.BASE_URL}hints/continents.geojson`).then((r) => r.json() as Promise<AreaFC>);
-  continentsGeo
-    .then((all) => {
-      // still the same quest and still allowed to hint?
-      if (quest === myQuest && questAreaFilter()) apply({ type: "FeatureCollection", features: all.features.filter(keep) });
-    })
-    .catch(() => {
-      continentsGeo = null; // a hint is optional; try again next time
-    });
+  apply(NO_AREAS);
 }
 
 function renderQuest() {
@@ -393,13 +395,13 @@ const gameLayers: GameLayers = () => ({
       type: "fill",
       source: "quest-areas",
       // outlines only: the borders a quest needs, not shaded areas
-      paint: { "fill-color": CONTINENT_COLOR, "fill-opacity": 0 },
+      paint: { "fill-color": QUEST_GOLD, "fill-opacity": 0 },
     },
     {
       id: "quest-area-line",
       type: "line",
       source: "quest-areas",
-      paint: { "line-color": CONTINENT_COLOR, "line-width": 1.2, "line-opacity": 0.8 },
+      paint: { "line-color": QUEST_GOLD, "line-width": 2, "line-opacity": 0.95 },
     },
     { id: "ring-fill", type: "fill", source: "ring", paint: { "fill-color": COLOR.ring, "fill-opacity": 0.12 } },
     { id: "answer-fill", type: "fill", source: "answer", paint: { "fill-color": COLOR.good, "fill-opacity": 0.15 } },
@@ -422,7 +424,7 @@ const gameLayers: GameLayers = () => ({
       id: "quest-line",
       type: "line",
       source: "quest-lines",
-      paint: { "line-color": "#c48a00", "line-width": 2, "line-dasharray": [4, 3], "line-opacity": 0.85 },
+      paint: { "line-color": QUEST_GOLD, "line-width": 2.5, "line-dasharray": [4, 3] },
     },
     {
       id: "quest-line-label",
@@ -436,7 +438,8 @@ const gameLayers: GameLayers = () => ({
         "text-size": 12,
         "text-offset": [0, -0.8],
       },
-      paint: { "text-color": "#8a6100", "text-halo-color": "rgba(255,255,255,0.9)", "text-halo-width": 1.5 },
+      // labels in a deeper shade of the quest gold, so they read on light and satellite maps
+      paint: { "text-color": "#8a6400", "text-halo-color": "rgba(255,255,255,0.95)", "text-halo-width": 1.6 },
     },
     {
       id: "centers",
@@ -458,6 +461,9 @@ map.on("style.load", () => {
     for (const [id, src] of Object.entries(sources)) map.addSource(id, src);
     for (const l of layers) map.addLayer(l);
   }
+  // hint data that arrived while this style was loading went to the old one: send it again
+  (map.getSource("quest-lines") as maplibregl.GeoJSONSource | undefined)?.setData(questLines());
+  (map.getSource("quest-areas") as maplibregl.GeoJSONSource | undefined)?.setData(areasData);
   updateRing();
 });
 

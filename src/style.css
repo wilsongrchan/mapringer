@@ -907,8 +907,8 @@ dialog {
   padding: 8px 10px 9px;
   border-radius: 12px;
   text-align: left;
-  background: rgba(246, 195, 67, 0.16);
-  border: 1px solid rgba(246, 195, 67, 0.55);
+  background: rgba(245, 183, 0, 0.13);
+  border: 1.5px solid rgba(245, 183, 0, 0.7);
 }
 
 .quest-head {
@@ -922,12 +922,12 @@ dialog {
 
 @media (prefers-color-scheme: dark) {
   .quest-head {
-    color: #f6c343;
+    color: #f5b700;
   }
 }
 
 .quest-star {
-  color: #f6c343;
+  color: #f5b700;
 }
 
 .quest-text {
@@ -962,7 +962,7 @@ dialog {
 .quest-answer {
   margin: -4px 0 10px;
   font-size: 13px;
-  color: #8a6100;
+  color: #a87a00; /* the quest gold, a shade darker so it reads on white */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -974,7 +974,7 @@ dialog {
 
 @media (prefers-color-scheme: dark) {
   .quest-answer {
-    color: #e0b84a;
+    color: #f5b700;
   }
 }
 
