@@ -4,6 +4,18 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 MapRinger (Traditional Chinese name 圈地家) is a daily map game: each day has three rings, played in order. Each ring has a fixed radius and a target population, and the player places it anywhere on Earth. It's a static Vite + TypeScript site with no backend. MapLibre GL draws a globe, and population is read straight from Cloud-Optimized GeoTIFFs with HTTP range requests (geotiff.js).
 
+## Rules
+
+- **Pushing to `main` deploys both live sites.** Never push without asking first.
+- **Don't change quest pools, variant order, or the order of RNG calls** in `puzzle.ts` or `quests.ts` without asking. Doing so silently changes the puzzles for past days and today.
+- **Never regenerate or edit `public/data/*.tif`.** Fix data problems in code (e.g. `src/continent-fixes.json`). If a `.tif` change is truly unavoidable, stop and say so: the owner has to re-upload it to both the `data-v1` release and Vercel Blob.
+- `src/countries.json` is append-only.
+- `continent-fixes.json` and `build_continent_borders.py` must stay in sync.
+- Every user-facing string goes in `i18n.ts`, in both English and Traditional Chinese.
+- After any code change, run `npx tsc --noEmit && npm test` and fix failures before reporting done.
+- For UI changes, check the result in the dev server with puppeteer-core screenshots before reporting done. puppeteer-core isn't a project dependency, so install it in a scratch folder and drive the system Chrome.
+- If the ring-1 UI changes, remind the owner to re-record the how-to-play clip.
+
 ## Commands
 
 ```sh
