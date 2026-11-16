@@ -143,11 +143,11 @@
       </ol>
 
       <p class="small" data-i18n-html="helpMaps"></p>
-      <!-- the same spot (Hong Kong) on each ring's map -->
+      <!-- the same spot (Hong Kong) on each map -->
       <div class="map-shots">
-        <figure><img src="help/map-easy.jpg" alt="" width="240" height="240" loading="lazy" /><figcaption>1 · <span data-i18n="diffEasy">Easy</span></figcaption></figure>
-        <figure><img src="help/map-standard.jpg" alt="" width="240" height="240" loading="lazy" /><figcaption>2 · <span data-i18n="diffStandard">Standard</span></figcaption></figure>
-        <figure><img src="help/map-hard.jpg" alt="" width="240" height="240" loading="lazy" /><figcaption>3 · <span data-i18n="diffHard">Hard</span></figcaption></figure>
+        <figure><img src="help/map-easy.jpg" alt="" width="240" height="240" loading="lazy" /><figcaption data-i18n="diffEasy">Easy</figcaption></figure>
+        <figure><img src="help/map-standard.jpg" alt="" width="240" height="240" loading="lazy" /><figcaption data-i18n="diffStandard">Standard</figcaption></figure>
+        <figure><img src="help/map-hard.jpg" alt="" width="240" height="240" loading="lazy" /><figcaption data-i18n="diffHard">Hard</figcaption></figure>
       </div>
       <p class="small" data-i18n-html="helpScoring"></p>
 
@@ -163,6 +163,17 @@
       </a>
     </dialog>
 
+
+    <!-- the day's map, asked once at the start of the day (main.ts pickMap) -->
+    <dialog id="map-dialog" class="card map-pick" closedby="none">
+      <h2 data-i18n="pickMapTitle">Pick today's map</h2>
+      <p class="small" data-i18n="pickMapSub">You'll play all three of today's rings on it.</p>
+      <div class="map-options">
+        <button data-map="easy"><img src="help/map-easy.jpg" alt="" width="240" height="240" /><span><strong data-i18n="diffEasy">Easy</strong><span data-i18n="blurbEasy"></span></span></button>
+        <button data-map="standard"><img src="help/map-standard.jpg" alt="" width="240" height="240" /><span><strong data-i18n="diffStandard">Standard</strong><span data-i18n="blurbStandard"></span></span></button>
+        <button data-map="hard"><img src="help/map-hard.jpg" alt="" width="240" height="240" /><span><strong data-i18n="diffHard">Hard</strong><span data-i18n="blurbHard"></span></span></button>
+      </div>
+    </dialog>
 
     <div class="toast" id="toast" role="status" hidden></div>
 

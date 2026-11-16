@@ -33,7 +33,7 @@ import {
   type Puzzle,
   type Stage,
 } from "./puzzle";
-import { loadResult, saveResult, type Result } from "./storage";
+import { loadDayMap, loadResult, saveDayMap, saveResult, type Result } from "./storage";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -54,7 +54,7 @@ const UNLIMITED = params.has("unlimited") ? params.get("unlimited") !== "0" : im
  */
 interface CarryOver {
   camera: { center: [number, number]; zoom: number };
-  test?: { day: number; practice: boolean; stage: Stage; results: (Result | null)[] };
+  test?: { day: number; practice: boolean; stage: Stage; results: (Result | null)[]; map: Difficulty | null };
 }
 const CARRY_KEY = "mapringer:carry-over";
 const carried: CarryOver | null = (() => {
@@ -92,8 +92,12 @@ preloadPopulation();
 
 let locked: Result | null = results[stage];
 let attempt = 0; // bumps on every reset so stale async work is ignored
-// each ring has its own map: ring 1 Easy, ring 2 Standard, ring 3 Hard
-let difficulty: Difficulty = STAGES[stage].map;
+// The player picks one map for the day (asked when the day starts) and plays
+// all three rings on it. Days played before there was a pick keep each ring's
+// old fixed map (ring 1 Easy, ring 2 Standard, ring 3 Hard).
+let dayMap: Difficulty | null = UNLIMITED ? (carriedTest?.map ?? null) : loadDayMap(day);
+const ringMap = (st: Stage): Difficulty => dayMap ?? results[st]?.map ?? (dayDone() ? STAGES[st].map : "standard");
+let difficulty: Difficulty = ringMap(stage);
 
 /**
  * Start zoomed out far enough to see the whole globe between the panels. On a
@@ -186,6 +190,16 @@ function questText(q: Quest): string {
  */
 const showHints = () => true;
 
+/** Quests about a line of latitude or longitude: their lines show on every map. */
+const LINE_QUESTS = new Set<Quest["kind"]>(["equator", "northOfCancer", "southOfCapricorn", "tropics", "west", "east", "primeMeridian", "northOf", "southOf"]);
+
+/**
+ * Hints about *places* (continent borders, country outlines, the circle round
+ * a city, flying to a sea): not on the Hard map until the ring is locked in.
+ * Finding the place is part of Hard. Latitude / longitude lines always show.
+ */
+const showPlaceHints = () => difficulty !== "hard" || !!locked;
+
 /** A labelled line all the way round the globe: a parallel (lat) or a meridian (lng). */
 function parallel(lat: number, name: string) {
   return { type: "Feature" as const, properties: { name }, geometry: { type: "LineString" as const, coordinates: [[-180, lat], [0, lat], [180, lat]] } };
@@ -265,7 +279,7 @@ let areasData: AreaFC = NO_AREAS;
 
 /** Whether the current quest's hint draws an outlined area (a country, or the circle round a city). */
 function questAreaFilter(): ((f: AreaFC["features"][number]) => boolean) | null {
-  if (!showHints() || !quest) return null;
+  if (!showHints() || !showPlaceHints() || !quest) return null;
   if (quest.kind === "nearCity") return () => true;
   if (quest.kind === "country") return () => true;
   // continent quests: just the lines where continents meet (see refreshHints)
@@ -273,16 +287,17 @@ function questAreaFilter(): ((f: AreaFC["features"][number]) => boolean) | null 
   return null;
 }
 
-/** Shaded relief on the map, for height quests only. */
-const showRelief = () => showHints() && quest?.kind === "high";
+/** Shaded relief: always on the Standard and Hard maps; on the satellite map only for height quests. */
+const showRelief = () => difficulty !== "easy" || (showHints() && quest?.kind === "high");
 
 /** Redraw the quest hints for the current quest, difficulty and lock state. */
 function refreshHints() {
   if (map.getLayer("quest-hillshade")) map.setLayoutProperty("quest-hillshade", "visibility", showRelief() ? "visible" : "none");
+  syncQuestGo();
   const myQuest = quest;
   borderLines = [];
   setSides(showHints() && quest && (quest.kind === "west" || quest.kind === "east") ? hemisphereSides() : []);
-  if (showHints() && quest && (quest.kind === "continent" || quest.kind === "twoContinents")) {
+  if (showHints() && showPlaceHints() && quest && (quest.kind === "continent" || quest.kind === "twoContinents")) {
     const only = quest.kind === "continent" ? quest.continent : null;
     bordersGeo ??= fetch(`${import.meta.env.BASE_URL}hints/continent-borders.geojson`).then((r) => r.json() as Promise<BorderFC>);
     bordersGeo
@@ -342,6 +357,7 @@ function questFocus(): maplibregl.LngLatBounds | null {
   const around = (lng: number, lat: number, km: number) => boundsOf([{ center: { lng, lat }, radiusKm: km }]);
   const gold = locked ? centerPoints.find((p) => p.kind === "quest") : undefined;
   if (gold) return boundsOf([{ center: gold.at, radiusKm: puzzle.radiusKm * 1.6 }]);
+  if (!showPlaceHints() && !LINE_QUESTS.has(quest.kind)) return null; // Hard: no flying to the place
   switch (quest.kind) {
     case "continent": {
       const [w, s, e, n] = CONTINENT_VIEW[quest.continent];
@@ -424,7 +440,8 @@ const NO_ZOOM = new Set<Quest["kind"]>(["landlocked", "islandsOnly", "high", "ce
 
 /** Only quests that have somewhere to show look tappable ("Show on map ›"). */
 function syncQuestGo() {
-  const can = !!quest && (centerPoints.some((p) => p.kind === "quest") || !NO_ZOOM.has(quest.kind));
+  const can =
+    !!quest && (centerPoints.some((p) => p.kind === "quest") || (!NO_ZOOM.has(quest.kind) && (showPlaceHints() || LINE_QUESTS.has(quest.kind))));
   $("quest").classList.toggle("can-go", can);
   if (can) $("quest").setAttribute("role", "button");
   else $("quest").removeAttribute("role");
@@ -466,7 +483,7 @@ function renderQuest() {
 function renderPuzzle() {
   $("puzzle-num").textContent = practice ? t("practiceTag") : `#${day}${UNLIMITED ? t("testTag") : ""}`;
   // "Ring 2 of 3 · Standard map · 100 pts", plus the twist if there is one
-  const ringLabel = t("ringLabel", { n: stage + 1, map: DIFFICULTIES[STAGES[stage].map].label, max: STAGES[stage].max });
+  const ringLabel = t("ringLabel", { n: stage + 1, map: DIFFICULTIES[ringMap(stage)].label, max: STAGES[stage].max });
   const TWIST_LABEL = { "empty-giant": "twistGiant", "packed-tiny": "twistTiny", void: "twistVoid", "mega-crowd": "twistMega" } as const;
   const twist = puzzle.twist ? t(TWIST_LABEL[puzzle.twist]) : "";
   $("challenge-label").textContent = twist ? `${ringLabel} · ${twist}` : ringLabel;
@@ -854,6 +871,7 @@ lockBtn.addEventListener("click", async () => {
       points: g.points,
       seaShare,
       highest: highest ?? undefined,
+      map: difficulty,
     };
     if (!UNLIMITED) saveResult(result);
     results[stage] = result;
@@ -1087,7 +1105,7 @@ let revealDone: Promise<void> = Promise.resolve(); // camera moves wait for the 
 
 /** Lift the fog: full-colour map with roads and labels once the ring is locked in. */
 function revealMap(r: Result, animate: boolean) {
-  if (revealed || STAGES[r.stage].map === "easy") return;
+  if (revealed || (r.map ?? STAGES[r.stage].map) === "easy") return;
   revealed = true;
   if (!animate) {
     applyRevealStyle(map, LANG, gameLayers);
@@ -1405,7 +1423,7 @@ function renderDayEnd() {
   $("day-total").textContent = `${results.map((r) => r!.emoji).join("")} ${fmtPoints(total)} / ${STAGES.reduce((n, st) => n + st.max, 0)}`;
 }
 
-/** Back to placing a ring (the current stage's), on that ring's own map. */
+/** Back to placing a ring (the current stage's), on the day's map. */
 function resetPlay() {
   attempt++;
   locked = null;
@@ -1425,7 +1443,7 @@ function resetPlay() {
   setAnswerLine("hide");
   setCenters([]);
   document.body.classList.remove("explored");
-  const want = STAGES[stage].map;
+  const want = ringMap(stage);
   if (difficulty !== want || revealed) {
     difficulty = want;
     styleSwap = applyMapStyle(map, difficulty, LANG, gameLayers);
@@ -1514,11 +1532,13 @@ $("again-btn").addEventListener("click", () => {
   results[stage] = null;
   resetPlay();
 });
-$("new-btn").addEventListener("click", () => {
+$("new-btn").addEventListener("click", async () => {
+  if (switching) return;
   practice = true;
   day = randomDay();
   rings = dayRings(day);
   results = [null, null, null];
+  dayMap = await pickMap(); // a new day: pick its map
   startRing(0);
 });
 
@@ -1526,7 +1546,10 @@ $("new-btn").addEventListener("click", () => {
 $("share-btn").addEventListener("click", async () => {
   const played = results.filter((r): r is Result => !!r);
   if (!played.length) return;
-  const text = shareText(day, played, location.origin + location.pathname, (n) => t("shareTitle", { n }), t("ptsUnit"));
+  // "MapRinger #3 · Hard map" (days from before the map pick: no map)
+  const m = played[0].map;
+  const title = (n: number) => t("shareTitle", { n }) + (m ? ` · ${t("shareMap", { map: DIFFICULTIES[m].label })}` : "");
+  const text = shareText(day, played, location.origin + location.pathname, title, t("ptsUnit"));
   try {
     if (navigator.share && matchMedia("(pointer: coarse)").matches) {
       await navigator.share({ text });
@@ -1571,7 +1594,7 @@ $("help-btn").addEventListener("click", () => helpDialog.showModal());
 $("lang-btn").addEventListener("click", () => {
   const c = map.getCenter();
   const keep: CarryOver = { camera: { center: [c.lng, c.lat], zoom: map.getZoom() } };
-  if (UNLIMITED) keep.test = { day, practice, stage, results };
+  if (UNLIMITED) keep.test = { day, practice, stage, results, map: dayMap };
   try {
     sessionStorage.setItem(CARRY_KEY, JSON.stringify(keep));
   } catch {
@@ -1587,6 +1610,49 @@ try {
   }
 } catch {
   /* storage unavailable */
+}
+
+// ---- the day's map: picked once, at the start of the day ----
+const mapDialog = $<HTMLDialogElement>("map-dialog");
+// a map has to be picked: Esc doesn't skip it (closedby="none" in the HTML;
+// browsers without that can still close it, so it reopens)
+let picking = false;
+mapDialog.addEventListener("cancel", (e) => e.preventDefault());
+mapDialog.addEventListener("close", () => {
+  if (picking) mapDialog.showModal();
+});
+
+/** Ask which map to play the day on. */
+function pickMap(): Promise<Difficulty> {
+  return new Promise((resolve) => {
+    const onClick = (e: Event) => {
+      const btn = (e.target as HTMLElement).closest<HTMLButtonElement>("[data-map]");
+      if (!btn) return;
+      mapDialog.removeEventListener("click", onClick);
+      picking = false;
+      mapDialog.close();
+      resolve(btn.dataset.map as Difficulty);
+    };
+    mapDialog.addEventListener("click", onClick);
+    picking = true;
+    mapDialog.showModal();
+  });
+}
+
+if (!dayMap && !dayDone()) {
+  const ask = () =>
+    pickMap().then((d) => {
+      dayMap = d;
+      if (!UNLIMITED) saveDayMap(day, d);
+      if (difficulty !== d) {
+        difficulty = d;
+        styleSwap = applyMapStyle(map, d, LANG, gameLayers);
+      }
+      renderPuzzle();
+    });
+  // first visit: the how-to-play comes first
+  if (helpDialog.open) helpDialog.addEventListener("close", ask, { once: true });
+  else ask();
 }
 
 /**

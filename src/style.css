@@ -1594,3 +1594,49 @@ dialog.card {
     font-size: 15px;
   }
 }
+
+/* ---- picking the day's map ---- */
+dialog.map-pick {
+  width: min(360px, calc(100% - 32px));
+}
+
+dialog.map-pick .small {
+  margin: 0 0 12px;
+  font-size: 14px;
+}
+
+.map-options {
+  display: grid;
+  gap: 8px;
+}
+
+.map-options button {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 8px;
+  border-radius: 12px;
+  text-align: left;
+  font: inherit;
+}
+
+.map-options img {
+  flex: none;
+  width: 64px;
+  height: 64px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.map-options strong {
+  display: block;
+  font-size: 16px;
+}
+
+.map-options button > span > span {
+  display: block;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.35;
+}

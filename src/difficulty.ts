@@ -146,7 +146,14 @@ async function swapStyle(map: maplibregl.Map, url: string, transform: (s: StyleS
   const style = globe(localise(transform(base)));
   const own = game();
   style.sources = { ...style.sources, ...own.sources };
-  style.layers = [...style.layers, ...own.layers];
+  // shaded relief goes under the water, borders and labels, so the sea stays
+  // flat and the names stay crisp; everything else of ours goes on top
+  const relief = own.layers.filter((l) => l.type === "hillshade");
+  let at = style.layers.findIndex(
+    (l) => (l.type === "fill" && srcLayer(l) === "water") || l.type === "symbol" || (l.type === "line" && srcLayer(l) === "boundary"),
+  );
+  if (at < 0) at = style.layers.length;
+  style.layers = [...style.layers.slice(0, at), ...relief, ...style.layers.slice(at), ...own.layers.filter((l) => l.type !== "hillshade")];
   map.setStyle(style, { diff });
 }
 

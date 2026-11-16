@@ -67,8 +67,11 @@ const en = {
   diffStandard: "Standard",
   diffHard: "Hard",
   blurbEasy: "Satellite with labels and borders",
-  blurbStandard: "Light map with labels, no roads",
-  blurbHard: "Land, lakes and rivers only",
+  blurbStandard: "Plain map with names and terrain, no roads",
+  blurbHard: "No names or quest outlines: just land, water and terrain",
+  pickMapTitle: "Pick today's map",
+  pickMapSub: "You'll play all three of today's rings on it.",
+  shareMap: (v: Vars) => `${v.map} map`,
 
   yourRing: "Your ring",
   target: "Target",
@@ -170,7 +173,7 @@ const en = {
   step3:
     "Lock it in. <strong>One</strong> try per ring, then see the real count and the closest ring that would have hit it.",
   helpMaps:
-    "<strong>Maps:</strong> ring 1 is on the satellite map (80 pts), ring 2 on a plain map (100 pts), ring 3 on a blank map (150 pts).",
+    "<strong>Maps:</strong> at the start of each day, pick the map you'll play all three rings on: satellite (Easy), a plain map (Standard) or one with no names at all (Hard).",
   helpScoring:
     "<strong>Scoring:</strong> the closer to the target, the more points (up to 80, 100 and 150). 🎯 within 15%, 🟠 within 2×, 🟡 within 5×, ⚪ further. Rings 2 and 3 have a quest: skip it and the ring is pass / fail, 🌙 for half points.",
   moreGamesLabel: "Game Rabbit: more games",
@@ -209,8 +212,11 @@ const zh: Record<Key, Entry> = {
   diffStandard: "標準",
   diffHard: "困難",
   blurbEasy: "衛星圖，有地名和邊界",
-  blurbStandard: "淺色地圖，有地名，沒有道路",
-  blurbHard: "只有陸地、湖泊和河流",
+  blurbStandard: "淺色地圖，有地名和地勢，沒有道路",
+  blurbHard: "沒有地名和任務邊界：只有陸地、水域和地勢",
+  pickMapTitle: "選擇今天的地圖",
+  pickMapSub: "今天的三個圈都會用這張地圖。",
+  shareMap: (v) => `${v.map}地圖`,
 
   yourRing: "你的圈",
   target: "目標",
@@ -306,7 +312,7 @@ const zh: Record<Key, Entry> = {
   step2: "轉動地球、放大地圖，把圈移到你認為人數剛好的地方。",
   step3: "鎖定圈圈。每個圈只有<strong>一次</strong>機會，之後會顯示真實人數，以及最近的正確圈。",
   helpMaps:
-    "<strong>地圖：</strong>第 1 圈用衛星圖（80 分），第 2 圈用淺色地圖（100 分），第 3 圈用空白地圖（150 分）。",
+    "<strong>地圖：</strong>每天開始時，選一張地圖玩當天的三個圈：衛星圖（簡單）、淺色地圖（標準），或完全沒有地名的地圖（困難）。",
   helpScoring:
     "<strong>計分：</strong>越接近目標，分數越高（滿分分別為 80、100、150）。🎯 相差 15% 以內，🟠 2 倍以內，🟡 5 倍以內，⚪ 更遠。第 2 和第 3 圈有任務：不完成的話只計合格與否，🌙 得一半分數。",
   moreGamesLabel: "Game Rabbit：更多遊戲",
