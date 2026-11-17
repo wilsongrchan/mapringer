@@ -528,3 +528,47 @@ describe("sample rings for quests", async () => {
       }
   });
 });
+
+describe("stats", async () => {
+  const { computeStats } = await import("../src/stats");
+  type R = import("../src/storage").Result;
+  const ring = (day: number, stage: Stage, points: number, grade: R["grade"] = "good", map: R["map"] = "hard"): R =>
+    ({ puzzle: day, stage, lng: 0, lat: 0, population: 1, accuracy: 1, score: 1, grade, emoji: "", points, map }) as R;
+  const full = (day: number, pts = [50, 60, 70], map: R["map"] = "hard") => ({
+    day,
+    map: map ?? null,
+    rings: pts.map((p, i) => ring(day, i as Stage, p, "good", map)),
+  });
+
+  it("counts finished days, streaks and averages", () => {
+    const days = [full(1), full(2), full(3, [80, 100, 150]), full(5), full(6), { day: 7, map: "hard" as const, rings: [ring(7, 0, 10), null, null] }];
+    const s = computeStats(days, 7);
+    expect(s.played).toBe(5);
+    expect(s.bestStreak).toBe(3); // days 1–3
+    expect(s.currentStreak).toBe(2); // today (7) isn't finished yet, so 5–6 still count
+    expect(s.best).toEqual({ day: 3, total: 330 });
+    expect(s.average).toBeCloseTo((180 * 4 + 330) / 5);
+    expect(s.byMap.hard.played).toBe(5);
+    expect(s.grades.good).toBe(16);
+  });
+
+  it("a missed day breaks the streak", () => {
+    expect(computeStats([full(1), full(2)], 4).currentStreak).toBe(0);
+    expect(computeStats([full(3), full(4)], 4).currentStreak).toBe(2);
+  });
+
+  it("the last 30 days start at day 1 and show unfinished days as gaps", () => {
+    const s = computeStats([full(2), { day: 3, map: null, rings: [ring(3, 0, 10), null, null] }], 3);
+    expect(s.recent.map((d) => d.total)).toEqual([null, 180, null]);
+  });
+
+  it("days from before the map pick (mixed maps) count, but not by map", () => {
+    // (older results have no map: each ring was on its own fixed map)
+    const old = (r: R) => ({ ...r, map: undefined });
+    const mixed = { day: 1, map: null, rings: [old(ring(1, 0, 50, "good")), old(ring(1, 1, 50, "pass")), old(ring(1, 2, 0, "fail"))] };
+    const s = computeStats([mixed], 1);
+    expect(s.played).toBe(1);
+    expect(s.byMap.easy.played + s.byMap.standard.played + s.byMap.hard.played).toBe(0);
+    expect(s.grades).toMatchObject({ good: 1, pass: 1, miss: 1 });
+  });
+});

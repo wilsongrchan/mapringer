@@ -1640,3 +1640,166 @@ dialog.map-pick .small {
   color: var(--muted);
   line-height: 1.35;
 }
+
+/* ---- header: stats icon, practice "back to today" pill ---- */
+#stats-btn svg {
+  width: 18px;
+  height: 18px;
+  display: block;
+  margin: auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.pill-btn {
+  height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: none;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 13px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* the streak under the day's total; taps through to the stats */
+.streak-line {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 2px 0 0;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* ---- stats dialog ---- */
+dialog.stats h3 {
+  margin: 0 0 6px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.stat-tiles {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin: 4px 0 12px;
+}
+
+.stat-tile {
+  padding: 6px 4px;
+  border-radius: 10px;
+  background: var(--border);
+  text-align: center;
+}
+
+.stat-tile strong {
+  display: block;
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stat-tile span {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.2;
+}
+
+.stat-section {
+  margin-bottom: 12px;
+}
+
+.stat-chart {
+  display: block;
+  width: 100%;
+  height: auto;
+  touch-action: pan-y;
+  cursor: crosshair;
+}
+
+.stat-chart .bar {
+  fill: var(--accent);
+  opacity: 0.55;
+}
+
+.stat-chart .bar.on {
+  opacity: 1;
+}
+
+.stat-chart .gap {
+  fill: var(--muted);
+  opacity: 0.6;
+}
+
+.stat-chart .grid {
+  stroke: var(--border);
+  stroke-dasharray: 3 3;
+}
+
+.stat-chart .axis {
+  stroke: var(--muted);
+  stroke-opacity: 0.5;
+}
+
+.stat-caption {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.grade-bars,
+.map-rows {
+  display: grid;
+  gap: 5px 10px;
+  align-items: center;
+  font-size: 13px;
+}
+
+.grade-bars {
+  grid-template-columns: auto minmax(0, 1fr) 2.5em;
+}
+
+.grade-bars .track {
+  height: 8px;
+}
+
+.grade-bars .fill {
+  display: block;
+  height: 100%;
+  border-radius: 0 4px 4px 0;
+  background: var(--accent);
+}
+
+.grade-bars .count {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.map-rows {
+  grid-template-columns: auto 1fr;
+}
+
+.map-rows .name {
+  font-weight: 600;
+}
+
+.stat-empty {
+  font-size: 14px;
+  color: var(--muted);
+}
+
+dialog.stats .small {
+  margin: 0;
+}

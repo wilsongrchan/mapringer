@@ -38,7 +38,12 @@
         <span class="num" id="puzzle-num"></span>
       </div>
       <div class="top-actions">
+        <!-- practice mode only: back to the day's real rings -->
+        <button class="pill-btn" id="today-btn" data-i18n="backToday" data-i18n-label="backTodayLabel" hidden>Practice ✕</button>
         <button class="icon-btn lang-btn" id="lang-btn" data-i18n="langButton" data-i18n-label="langButtonLabel">中</button>
+        <button class="icon-btn" id="stats-btn" data-i18n-label="statsLabel" aria-label="Stats">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 16V10M10 16V4M16 16V8" /></svg>
+        </button>
         <button class="icon-btn" id="help-btn" data-i18n-label="helpLabel" aria-label="How to play">?</button>
       </div>
     </header>
@@ -105,9 +110,12 @@
         <div class="day-summary" id="day-summary" hidden>
           <ol class="day-rows" id="day-rows"></ol>
           <div class="day-total"><span data-i18n="dayTotal">Today</span> <strong id="day-total"></strong></div>
+          <button class="streak-line" id="streak-line" hidden></button>
         </div>
         <div class="actions">
           <button class="primary" id="share-btn" data-i18n="shareResult" hidden>Share result</button>
+          <!-- once the day is done: a practice round (nothing saved) -->
+          <button id="practice-btn" data-i18n="practice" hidden>Practice</button>
           <!-- test mode only -->
           <button id="again-btn" data-i18n="tryAgain" hidden>Try again</button>
           <button id="new-btn" data-i18n="newPuzzle" hidden>New puzzle</button>
@@ -164,10 +172,21 @@
     </dialog>
 
 
+    <!-- stats from the rings saved in this browser (main.ts openStats, stats-view.ts) -->
+    <dialog id="stats-dialog" class="card stats">
+      <div class="dialog-head">
+        <h2 data-i18n="statsTitle">Your stats</h2>
+        <button class="dialog-x" id="stats-close" data-i18n-label="closeLabel" aria-label="Close">✕</button>
+      </div>
+      <div id="stats-body"></div>
+      <p class="small" data-i18n="statsLocal"></p>
+      <div class="dialog-actions"><button id="stats-practice" data-i18n="practice">Practice</button></div>
+    </dialog>
+
     <!-- the day's map, asked once at the start of the day (main.ts pickMap) -->
     <dialog id="map-dialog" class="card map-pick" closedby="none">
-      <h2 data-i18n="pickMapTitle">Pick today's map</h2>
-      <p class="small" data-i18n="pickMapSub">You'll play all three of today's rings on it.</p>
+      <h2 id="pick-title" data-i18n="pickMapTitle">Pick today's map</h2>
+      <p class="small" id="pick-sub" data-i18n="pickMapSub">You'll play all three of today's rings on it.</p>
       <div class="map-options">
         <button data-map="easy"><img src="help/map-easy.jpg" alt="" width="240" height="240" /><span><strong data-i18n="diffEasy">Easy</strong><span data-i18n="blurbEasy"></span></span></button>
         <button data-map="standard"><img src="help/map-standard.jpg" alt="" width="240" height="240" /><span><strong data-i18n="diffStandard">Standard</strong><span data-i18n="blurbStandard"></span></span></button>

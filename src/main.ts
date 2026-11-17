@@ -33,7 +33,9 @@ import {
   type Puzzle,
   type Stage,
 } from "./puzzle";
-import { loadDayMap, loadResult, saveDayMap, saveResult, type Result } from "./storage";
+import { computeStats } from "./stats";
+import { renderStats } from "./stats-view";
+import { loadAllDays, loadDayMap, loadResult, saveDayMap, saveResult, type Result } from "./storage";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -45,7 +47,9 @@ applyStaticText();
 // puzzles, and saves nothing.
 const params = new URLSearchParams(location.search);
 const dayParam = Number(params.get("day"));
-const UNLIMITED = params.has("unlimited") ? params.get("unlimited") !== "0" : import.meta.env.DEV;
+// ?practice (the "Practice" button): random days on any map, retries, nothing saved
+const PRACTICE = params.has("practice");
+const UNLIMITED = PRACTICE || (params.has("unlimited") ? params.get("unlimited") !== "0" : import.meta.env.DEV);
 // Each day is three rings, easy to hard, played one after another.
 /**
  * Switching language reloads the page. Just before, the game stashes where you
@@ -504,6 +508,14 @@ if (UNLIMITED) {
   $("again-btn").hidden = false;
   $("new-btn").hidden = false;
   $("next-info").hidden = true;
+}
+if (PRACTICE) {
+  // the "Practice ✕" pill says it's practice (and leaves it), so no "· practice" tag
+  $("today-btn").hidden = false;
+  $("puzzle-num").hidden = true;
+  $("stats-practice").hidden = true;
+  $("pick-title").textContent = t("pickMapPractice");
+  $("pick-sub").textContent = t("pickMapPracticeSub");
 }
 
 // ---- map layers ----
@@ -1409,8 +1421,13 @@ function startCountdown() {
 function renderDayEnd() {
   const done = dayDone();
   $("next-btn").hidden = stage === 2 || !results[stage];
-  $("share-btn").hidden = !done;
+  $("share-btn").hidden = !done || PRACTICE;
+  $("practice-btn").hidden = !done || UNLIMITED;
   $("next-info").hidden = !done || UNLIMITED;
+  // a finished day: the streak (all three rings, days in a row), which opens the stats
+  const streak = done && !UNLIMITED ? currentStats().currentStreak : 0;
+  $("streak-line").hidden = !streak;
+  if (streak) $("streak-line").textContent = `${t("streakLine", { n: streak })} · ${t("seeStats")}`;
   $("day-summary").hidden = !done;
   if (!done) return;
   const rows = results.map((r, i) =>
@@ -1561,6 +1578,30 @@ $("share-btn").addEventListener("click", async () => {
     if ((e as Error).name !== "AbortError") toast(t("shareFailed"));
   }
 });
+
+// ---- stats (from the rings saved in this browser) and practice ----
+function currentStats() {
+  return computeStats(loadAllDays(), todaysNumber());
+}
+const statsDialog = $<HTMLDialogElement>("stats-dialog");
+function openStats() {
+  renderStats($("stats-body"), currentStats());
+  statsDialog.showModal();
+}
+$("stats-btn").addEventListener("click", openStats);
+$("streak-line").addEventListener("click", openStats);
+$("stats-close").addEventListener("click", () => statsDialog.close());
+
+/** Into practice (a fresh page with ?practice) or back to the day's real rings. */
+function goPractice(on: boolean) {
+  const url = new URL(location.href);
+  for (const k of ["practice", "day", "unlimited"]) url.searchParams.delete(k);
+  if (on) url.searchParams.set("practice", "");
+  location.href = url.toString();
+}
+$("practice-btn").addEventListener("click", () => goPractice(true));
+$("stats-practice").addEventListener("click", () => goPractice(true));
+$("today-btn").addEventListener("click", () => goPractice(false));
 
 // ---- help ----
 const helpDialog = $<HTMLDialogElement>("help-dialog");
