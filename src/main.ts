@@ -35,6 +35,7 @@ import {
 } from "./puzzle";
 import { computeStats } from "./stats";
 import { renderStats } from "./stats-view";
+import { cloudEnabled, currentAccount, googleEnabled, onAccount, pushDayMap, pushResult, sendCode, signInWithGoogle, signOut, startCloud, verifyCode } from "./cloud";
 import { loadAllDays, loadDayMap, loadResult, saveDayMap, saveResult, type Result } from "./storage";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -885,7 +886,10 @@ lockBtn.addEventListener("click", async () => {
       highest: highest ?? undefined,
       map: difficulty,
     };
-    if (!UNLIMITED) saveResult(result);
+    if (!UNLIMITED) {
+      saveResult(result);
+      pushResult(result);
+    }
     results[stage] = result;
     locked = result;
     // a happy buzz for a bullseye, a short one otherwise
@@ -1592,6 +1596,102 @@ $("stats-btn").addEventListener("click", openStats);
 $("streak-line").addEventListener("click", openStats);
 $("stats-close").addEventListener("click", () => statsDialog.close());
 
+// ---- Game Rabbit accounts (cloud.ts): stats kept in the account, on any device ----
+function renderAccount() {
+  const a = currentAccount();
+  $("account-text").textContent = a ? t("statsSignedIn", { email: a.email }) : t("statsLocal");
+  const btn = $("account-btn");
+  btn.hidden = !cloudEnabled;
+  btn.textContent = a ? t("signOut") : t("signInToKeep");
+}
+$("account-btn").addEventListener("click", async () => {
+  if (!currentAccount()) return openSignIn();
+  await signOut();
+  toast(t("signedOutToast"));
+});
+
+const signInDialog = $<HTMLDialogElement>("signin-dialog");
+const emailForm = $<HTMLFormElement>("email-form");
+const codeForm = $<HTMLFormElement>("code-form");
+const emailInput = $<HTMLInputElement>("signin-email");
+const codeInput = $<HTMLInputElement>("signin-code");
+function signInError(msg: string | null) {
+  $("signin-error").hidden = !msg;
+  $("signin-error").textContent = msg ?? "";
+}
+function showCodeStep(on: boolean) {
+  emailForm.hidden = on;
+  codeForm.hidden = !on;
+  $("google-btn").hidden = $("signin-or").hidden = on || !googleOn;
+  signInError(null);
+  if (on) {
+    $("code-sent").textContent = t("codeSent", { email: emailInput.value.trim() });
+    codeInput.value = "";
+    codeInput.focus();
+  }
+}
+let googleOn = false;
+function openSignIn() {
+  showCodeStep(false);
+  signInDialog.showModal();
+  googleEnabled().then((on) => {
+    googleOn = on;
+    if (!codeForm.hidden) return;
+    $("google-btn").hidden = $("signin-or").hidden = !on;
+  });
+}
+/** Disable a form's buttons while its request runs. */
+async function busy(form: HTMLFormElement, work: () => Promise<void>) {
+  const buttons = [...form.querySelectorAll("button")];
+  buttons.forEach((b) => (b.disabled = true));
+  try {
+    await work();
+  } finally {
+    buttons.forEach((b) => (b.disabled = false));
+  }
+}
+emailForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  busy(emailForm, async () => {
+    try {
+      await sendCode(emailInput.value.trim());
+      showCodeStep(true);
+    } catch (err) {
+      console.warn(err);
+      signInError(t("sendFailed"));
+    }
+  });
+});
+codeForm.addEventListener("submit", (e) => {
+  e.preventDefault();
+  busy(codeForm, async () => {
+    try {
+      await verifyCode(emailInput.value.trim(), codeInput.value.trim());
+      signInDialog.close();
+      toast(t("signedInToast"));
+    } catch (err) {
+      console.warn(err);
+      signInError(t("signInFailed"));
+    }
+  });
+});
+$("code-back").addEventListener("click", () => showCodeStep(false));
+$("google-btn").addEventListener("click", () => signInWithGoogle().catch((err) => (console.warn(err), signInError(t("sendFailed")))));
+$("signin-close").addEventListener("click", () => signInDialog.close());
+
+onAccount(() => {
+  renderAccount();
+  if (statsDialog.open) renderStats($("stats-body"), currentStats());
+  if (!$("result-panel").hidden) renderDayEnd(); // (the streak line)
+});
+startCloud((days) => {
+  // rings from the account (e.g. played on another device): today's change the
+  // game itself, so start over from them (unless a ring is being locked in)
+  if (!UNLIMITED && days.includes(day) && !lockingAt) return location.reload();
+  if (statsDialog.open) renderStats($("stats-body"), currentStats());
+  if (!$("result-panel").hidden) renderDayEnd(); // (the streak line)
+});
+
 /** Into practice (a fresh page with ?practice) or back to the day's real rings. */
 function goPractice(on: boolean) {
   const url = new URL(location.href);
@@ -1684,7 +1784,10 @@ if (!dayMap && !dayDone()) {
   const ask = () =>
     pickMap().then((d) => {
       dayMap = d;
-      if (!UNLIMITED) saveDayMap(day, d);
+      if (!UNLIMITED) {
+        saveDayMap(day, d);
+        pushDayMap(day, d);
+      }
       if (difficulty !== d) {
         difficulty = d;
         styleSwap = applyMapStyle(map, d, LANG, gameLayers);

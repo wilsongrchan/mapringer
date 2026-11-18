@@ -1803,3 +1803,95 @@ dialog.stats h3 {
 dialog.stats .small {
   margin: 0;
 }
+
+/* ---- accounts: the line under the stats, and the sign-in dialog ---- */
+.account-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 6px;
+  margin-top: 12px;
+}
+
+.account-line .small {
+  margin: 0;
+}
+
+.link-btn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.signin .small {
+  margin: 0 0 14px;
+}
+
+.google-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  font-weight: 600;
+}
+
+.or-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 14px 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.or-line::before,
+.or-line::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
+
+.signin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.signin-form label {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.signin-form input {
+  font: inherit;
+  font-size: 16px; /* (smaller makes iPhones zoom in on focus) */
+  padding: 11px 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--fg);
+}
+
+#signin-code {
+  font-size: 22px;
+  letter-spacing: 0.3em;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.signin-form .link-btn {
+  align-self: center;
+  margin-top: 4px;
+}
+
+.signin-error {
+  margin: 10px 0 0;
+  color: var(--accent);
+  font-size: 13px;
+}

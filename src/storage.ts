@@ -60,6 +60,21 @@ export function saveDayMap(day: number, d: Difficulty): void {
   }
 }
 
+/** Every day with a map picked on this device (some may have no rings yet). */
+export function loadAllDayMaps(): { day: number; map: Difficulty }[] {
+  const out: { day: number; map: Difficulty }[] = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const m = /^mapringer:map:(\d+)$/.exec(localStorage.key(i) ?? "");
+      const map = m && loadDayMap(Number(m[1]));
+      if (map) out.push({ day: Number(m![1]), map });
+    }
+  } catch {
+    /* storage unavailable */
+  }
+  return out;
+}
+
 /** Every day with a saved ring on this device, with its rings and map (for the stats). */
 export function loadAllDays(): { day: number; rings: (Result | null)[]; map: Difficulty | null }[] {
   const days = new Set<number>();

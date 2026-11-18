@@ -10,6 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.119.0",
     "geotiff": "^3.0.5",
     "maplibre-gl": "^6.17.0"
   },
