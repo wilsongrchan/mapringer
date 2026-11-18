@@ -460,6 +460,25 @@ function goToQuest() {
   map.fitBounds(b, { padding: pad, duration: 1400, maxZoom: locked ? 13 : 8 });
 }
 $("quest").addEventListener("click", goToQuest);
+
+// ---- the challenge card collapses to its one line (a big ring can sit under it) ----
+function setChallengeCollapsed(collapsed: boolean) {
+  const card = $("challenge");
+  if (card.classList.contains("collapsed") === collapsed) return;
+  card.classList.toggle("collapsed", collapsed);
+  const btn = $("challenge-toggle");
+  btn.setAttribute("aria-expanded", String(!collapsed));
+  btn.setAttribute("aria-label", t(collapsed ? "showChallenge" : "hideChallenge"));
+  fitChallenge();
+}
+$("challenge-toggle").addEventListener("click", (e) => {
+  e.stopPropagation();
+  setChallengeCollapsed(!$("challenge").classList.contains("collapsed"));
+});
+// collapsed, the whole card is the way back
+$("challenge").addEventListener("click", () => {
+  if ($("challenge").classList.contains("collapsed")) setChallengeCollapsed(false);
+});
 // the "★ Closest that does the quest" line in the results goes there too
 $("quest-answer").addEventListener("click", () => {
   if (centerPoints.some((p) => p.kind === "quest")) goToQuest();
@@ -475,6 +494,8 @@ function renderQuest() {
   refreshHints();
   syncQuestGo();
   $("quest").hidden = !quest; // ring 1 has no quest
+  $("challenge").classList.toggle("has-quest", !!quest);
+  if (!quest) setChallengeCollapsed(false); // (nothing to hide: no toggle)
   if (quest)
     $("quest-text").replaceChildren(
       Object.assign(document.createElement("span"), { className: "quest-do", textContent: questText(quest) }),
@@ -515,8 +536,10 @@ if (PRACTICE) {
   $("today-btn").hidden = false;
   $("puzzle-num").hidden = true;
   $("stats-practice").hidden = true;
-  $("pick-title").textContent = t("pickMapPractice");
-  $("pick-sub").textContent = t("pickMapPracticeSub");
+  // (?practice&day=<today>: today's rings again, from "Other maps" on the results)
+  const replay = dayParam === todaysNumber();
+  $("pick-title").textContent = t(replay ? "pickMapReplay" : "pickMapPractice");
+  $("pick-sub").textContent = t(replay ? "pickMapReplaySub" : "pickMapPracticeSub");
 }
 
 // ---- map layers ----
@@ -1427,6 +1450,9 @@ function renderDayEnd() {
   $("next-btn").hidden = stage === 2 || !results[stage];
   $("share-btn").hidden = !done || PRACTICE;
   $("practice-btn").hidden = !done || UNLIMITED;
+  $("replay-btn").hidden = !done || UNLIMITED;
+  // a finished day: Share and the countdown, then Other maps and Practice on a row of their own
+  document.querySelector(".actions")!.classList.toggle("day-done", done && !UNLIMITED);
   $("next-info").hidden = !done || UNLIMITED;
   // a finished day: the streak (all three rings, days in a row), which opens the stats
   const streak = done && !UNLIMITED ? currentStats().currentStreak : 0;
@@ -1491,6 +1517,7 @@ async function startRing(st: Stage) {
     setInteractive(false);
     attempt++; // drop the last ring's pending searches (they'd re-frame the map)
     $("result-panel").hidden = true;
+    setChallengeCollapsed(false); // a new ring: show its quest
     setResultLayout(false);
     // (the layout padding changes next, and that would cut a camera move short)
     await revealDone;
@@ -1603,7 +1630,12 @@ function renderAccount() {
   const btn = $("account-btn");
   btn.hidden = !cloudEnabled;
   btn.textContent = a ? t("signOut") : t("signInToKeep");
+  // the map picker (the start of each day): guest + sign in, or who's signed in
+  $("pick-account").hidden = !cloudEnabled || UNLIMITED; // (practice and test mode save nothing)
+  $("pick-account-text").textContent = a ? t("pickSignedIn", { email: a.email }) : t("pickGuest");
+  $("pick-signin").hidden = !!a;
 }
+$("pick-signin").addEventListener("click", () => openSignIn());
 $("account-btn").addEventListener("click", async () => {
   if (!currentAccount()) return openSignIn();
   await signOut();
@@ -1628,8 +1660,47 @@ function showCodeStep(on: boolean) {
     $("code-sent").textContent = t("codeSent", { email: emailInput.value.trim() });
     codeInput.value = "";
     codeInput.focus();
-  }
+    startResendWait();
+  } else stopResendWait();
 }
+
+// waiting for the code: "Send a new code in 60 s", then a button; the spam hint after a few seconds
+const RESEND_S = 60;
+const SPAM_HINT_MS = 10_000;
+let resendTimer: number | undefined;
+let spamTimer: number | undefined;
+function stopResendWait() {
+  clearInterval(resendTimer);
+  clearTimeout(spamTimer);
+  $("code-help").hidden = true;
+}
+function startResendWait() {
+  stopResendWait();
+  const btn = $<HTMLButtonElement>("resend-btn");
+  const until = Date.now() + RESEND_S * 1000;
+  const tick = () => {
+    const s = Math.ceil((until - Date.now()) / 1000);
+    btn.disabled = s > 0;
+    btn.textContent = s > 0 ? t("resendIn", { s }) : t("resend");
+    if (s <= 0) clearInterval(resendTimer);
+  };
+  tick();
+  resendTimer = window.setInterval(tick, 1000);
+  spamTimer = window.setTimeout(() => ($("code-help").hidden = false), SPAM_HINT_MS);
+}
+$("resend-btn").addEventListener("click", () =>
+  busy(codeForm, async () => {
+    try {
+      await sendCode(emailInput.value.trim());
+      signInError(null);
+      toast(t("codeResent"));
+    } catch (err) {
+      console.warn(err);
+      signInError(t("sendFailed"));
+    }
+  }).finally(startResendWait),
+);
+signInDialog.addEventListener("close", stopResendWait);
 let googleOn = false;
 function openSignIn() {
   showCodeStep(false);
@@ -1692,13 +1763,18 @@ startCloud((days) => {
   if (!$("result-panel").hidden) renderDayEnd(); // (the streak line)
 });
 
-/** Into practice (a fresh page with ?practice) or back to the day's real rings. */
-function goPractice(on: boolean) {
+/**
+ * Into practice (a fresh page with ?practice; with `replayDay`, that day's
+ * rings again, on a map picked afresh) or back to the day's real rings.
+ */
+function goPractice(on: boolean, replayDay?: number) {
   const url = new URL(location.href);
   for (const k of ["practice", "day", "unlimited"]) url.searchParams.delete(k);
   if (on) url.searchParams.set("practice", "");
+  if (on && replayDay) url.searchParams.set("day", String(replayDay));
   location.href = url.toString();
 }
+$("replay-btn").addEventListener("click", () => goPractice(true, day));
 $("practice-btn").addEventListener("click", () => goPractice(true));
 $("stats-practice").addEventListener("click", () => goPractice(true));
 $("today-btn").addEventListener("click", () => goPractice(false));

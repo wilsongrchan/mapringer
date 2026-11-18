@@ -234,9 +234,14 @@ export type Grade = ReturnType<typeof gradeRing>["grade"];
 export const fmt = (n: number) => Math.round(n).toLocaleString("en-US");
 
 /** The day's share text: "MapRinger #3 · 🎯🌙🟠 263/330" and the link. */
+/**
+ * The day's share message. The link goes in the middle, not at the end: chat
+ * apps (iMessage and others) turn a message that starts or ends with a link
+ * into a big separate preview card, but leave a link mid-text as plain text.
+ */
 export function shareText(day: number, rings: { emoji: string; points: number }[], url: string, title: (n: number) => string, unit: string): string {
   const total = rings.reduce((n, r) => n + r.points, 0);
-  return [title(day), `${rings.map((r) => r.emoji).join("")} ${fmtPoints(total)}/${DAY_MAX} ${unit}`.trim(), url].join("\n");
+  return [title(day), url, `${rings.map((r) => r.emoji).join("")} ${fmtPoints(total)}/${DAY_MAX} ${unit}`.trim()].join("\n");
 }
 
 /** Points are whole numbers except for odd halves (e.g. 37.5). */

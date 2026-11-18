@@ -49,6 +49,10 @@
     </header>
 
     <section class="challenge card" id="challenge">
+      <!-- collapses to just the challenge line, so a big ring isn't hidden under it (main.ts setChallengeCollapsed) -->
+      <button class="challenge-toggle" id="challenge-toggle" aria-expanded="true" data-i18n-label="hideChallenge" aria-label="Hide the details">
+        <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 7.5 6 4l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
+      </button>
       <div class="label" id="challenge-label">Today's ring</div>
       <div class="challenge-line" id="challenge-line">
       </div>
@@ -114,7 +118,9 @@
         </div>
         <div class="actions">
           <button class="primary" id="share-btn" data-i18n="shareResult" hidden>Share result</button>
-          <!-- once the day is done: a practice round (nothing saved) -->
+          <!-- once the day is done: today's rings again on another map, or a practice round (nothing saved) -->
+          <span class="actions-break" aria-hidden="true"></span>
+          <button id="replay-btn" data-i18n="otherMaps" data-i18n-label="otherMapsLabel" hidden>Other maps</button>
           <button id="practice-btn" data-i18n="practice" hidden>Practice</button>
           <!-- test mode only -->
           <button id="again-btn" data-i18n="tryAgain" hidden>Try again</button>
@@ -213,6 +219,9 @@
         <label for="signin-code" id="code-sent"></label>
         <input id="signin-code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6,10}" maxlength="10" required />
         <button type="submit" class="primary" data-i18n="signInBtn">Sign in</button>
+        <!-- no code yet: a new one after 60 s (Supabase's limit), and the spam folder after a few seconds -->
+        <button type="button" class="link-btn" id="resend-btn" disabled></button>
+        <p class="small code-help" id="code-help" data-i18n="codeSpam" hidden></p>
         <button type="button" class="link-btn" id="code-back" data-i18n="otherEmail">Use a different email</button>
       </form>
       <p class="signin-error" id="signin-error" role="alert" hidden></p>
@@ -227,6 +236,11 @@
         <button data-map="standard"><img src="help/map-standard.jpg" alt="" width="240" height="240" /><span><strong data-i18n="diffStandard">Standard</strong><span data-i18n="blurbStandard"></span></span></button>
         <button data-map="hard"><img src="help/map-hard.jpg" alt="" width="240" height="240" /><span><strong data-i18n="diffHard">Hard</strong><span data-i18n="blurbHard"></span></span></button>
       </div>
+      <!-- guest or signed in (main.ts renderAccount); picking a map just plays on as a guest -->
+      <p class="pick-account" id="pick-account" hidden>
+        <span id="pick-account-text"></span>
+        <button class="link-btn" id="pick-signin" data-i18n="pickSignIn">Sign in / Sign up</button>
+      </p>
     </dialog>
 
     <div class="toast" id="toast" role="status" hidden></div>

@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { fromFile, type GeoTIFFImage } from "geotiff";
 import { beforeAll, describe, expect, it } from "vitest";
 import { circleWindows, haversineKm, sumCircle, type GridInfo, type LngLat } from "../src/geo";
-import { accuracy, dayRings, gradeRing, levelOf, niceRound, puzzleNumber, ringFor, score, STAGES, type Stage } from "../src/puzzle";
+import { accuracy, dayRings, gradeRing, levelOf, niceRound, puzzleNumber, ringFor, score, shareText, STAGES, type Stage } from "../src/puzzle";
 
 describe("geometry", () => {
   it("haversine matches a known distance (London → Paris ≈ 344 km)", () => {
@@ -526,6 +526,14 @@ describe("sample rings for quests", async () => {
         const q = questFor(ringFor(n, st))!;
         expect(questAnchors(q, { lat: 51.5, lng: -0.1 }).length, JSON.stringify(q)).toBeGreaterThan(0);
       }
+  });
+});
+
+describe("share text", () => {
+  it("keeps the link mid-message (a trailing link becomes a big preview card in chat apps)", () => {
+    const text = shareText(10, [{ emoji: "🎯", points: 80 }, { emoji: "🟠", points: 60 }, { emoji: "🌙", points: 75 }], "https://www.gamerabbit.io/mapringer/", (n) => `MapRinger #${n} · Hard map`, "pts");
+    expect(text).toBe("MapRinger #10 · Hard map\nhttps://www.gamerabbit.io/mapringer/\n🎯🟠🌙 215/330 pts");
+    expect(text.endsWith("/")).toBe(false);
   });
 });
 
