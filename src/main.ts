@@ -1633,7 +1633,7 @@ function renderAccount() {
   // the map picker (the start of each day): guest + sign in, or who's signed in
   $("pick-account").hidden = !cloudEnabled || UNLIMITED; // (practice and test mode save nothing)
   $("pick-account-text").textContent = a ? t("pickSignedIn", { email: a.email }) : t("pickGuest");
-  $("pick-signin").hidden = !!a;
+  $("pick-signin").hidden = $("pick-account-end").hidden = !!a;
 }
 $("pick-signin").addEventListener("click", () => openSignIn());
 $("account-btn").addEventListener("click", async () => {
@@ -1836,8 +1836,17 @@ const mapDialog = $<HTMLDialogElement>("map-dialog");
 let picking = false;
 mapDialog.addEventListener("cancel", (e) => e.preventDefault());
 mapDialog.addEventListener("close", () => {
-  if (picking) mapDialog.showModal();
+  if (picking) openPicker();
+  else $("pick-shade").hidden = true;
 });
+/**
+ * Not a modal: the header (language, stats, help) stays usable while picking.
+ * A shade under the picker covers the game below the header instead.
+ */
+function openPicker() {
+  $("pick-shade").hidden = false;
+  mapDialog.show();
+}
 
 /** Ask which map to play the day on. */
 function pickMap(): Promise<Difficulty> {
@@ -1852,7 +1861,7 @@ function pickMap(): Promise<Difficulty> {
     };
     mapDialog.addEventListener("click", onClick);
     picking = true;
-    mapDialog.showModal();
+    openPicker();
   });
 }
 

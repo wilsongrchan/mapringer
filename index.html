@@ -227,6 +227,8 @@
       <p class="signin-error" id="signin-error" role="alert" hidden></p>
     </dialog>
 
+    <!-- under the map picker: it covers the game, not the header (main.ts pickMap) -->
+    <div class="pick-shade" id="pick-shade" hidden></div>
     <!-- the day's map, asked once at the start of the day (main.ts pickMap) -->
     <dialog id="map-dialog" class="card map-pick" closedby="none">
       <h2 id="pick-title" data-i18n="pickMapTitle">Pick today's map</h2>
@@ -238,8 +240,7 @@
       </div>
       <!-- guest or signed in (main.ts renderAccount); picking a map just plays on as a guest -->
       <p class="pick-account" id="pick-account" hidden>
-        <span id="pick-account-text"></span>
-        <button class="link-btn" id="pick-signin" data-i18n="pickSignIn">Sign in / Sign up</button>
+        <span id="pick-account-text"></span><button class="link-btn" id="pick-signin" data-i18n="pickSignIn">Sign in / Sign up</button><span id="pick-account-end" data-i18n="pickGuestEnd"></span>
       </p>
     </dialog>
 

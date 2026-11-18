@@ -2004,6 +2004,11 @@ dialog.stats .small {
   margin-left: 4px;
 }
 
+/* (Chinese runs on without spaces) */
+:lang(zh) .pick-account .link-btn {
+  margin-left: 0;
+}
+
 /* waiting for the code: the resend countdown and the spam hint */
 #resend-btn:disabled {
   color: var(--muted);
@@ -2016,4 +2021,22 @@ dialog.stats .small {
 .code-help {
   margin: 2px 0 0;
   text-align: center;
+}
+
+/* ---- the map picker isn't modal: it and its shade sit below the header, which stays usable ---- */
+.pick-shade {
+  position: fixed;
+  inset: calc(var(--safe-top) + var(--header-h)) 0 0;
+  z-index: 20;
+  background: rgba(0, 0, 0, 0.35);
+}
+
+dialog.map-pick[open]:not(:modal) {
+  position: fixed;
+  inset: calc(var(--safe-top) + var(--header-h)) 0 0;
+  z-index: 21;
+  height: fit-content;
+  max-height: calc(100% - var(--safe-top) - var(--header-h) - 16px);
+  margin: auto;
+  overflow-y: auto;
 }
