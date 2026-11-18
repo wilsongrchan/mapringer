@@ -2040,3 +2040,30 @@ dialog.map-pick[open]:not(:modal) {
   margin: auto;
   overflow-y: auto;
 }
+
+/* sign in: the title with the Game Rabbit logo beside it (black on light, white on dark) */
+.signin-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.signin-title .grm {
+  display: block;
+  height: 20px;
+  width: auto;
+}
+
+.signin-title .grm.dk {
+  display: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  .signin-title .grm.lt {
+    display: none;
+  }
+
+  .signin-title .grm.dk {
+    display: block;
+  }
+}

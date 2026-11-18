@@ -196,7 +196,12 @@
     <!-- Game Rabbit sign-in: Google, or a code sent by email (cloud.ts) -->
     <dialog id="signin-dialog" class="card signin">
       <div class="dialog-head">
-        <h2 data-i18n="signInTitle">Sign in</h2>
+        <h2 class="signin-title">
+          <span data-i18n="signInTitle">Sign in</span>
+          <!-- Game Rabbit, black and white like the help dialog's (the colour logo is for emails only) -->
+          <img class="grm lt" src="brand/gr-stack-dark.png" alt="Game Rabbit" width="62" height="20" />
+          <img class="grm dk" src="brand/gr-stack-light.png" alt="Game Rabbit" width="62" height="20" />
+        </h2>
         <button class="dialog-x" id="signin-close" data-i18n-label="closeLabel" aria-label="Close">✕</button>
       </div>
       <p class="small" data-i18n="signInSub"></p>
