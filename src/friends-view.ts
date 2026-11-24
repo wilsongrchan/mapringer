@@ -43,6 +43,7 @@ const nameOf = (f: { name: string }) => f.name || t("friendsNoName");
 
 let view: { friend: Friend } | null = null; // null: the list
 let run = 0; // a newer render replaces an older one still loading
+let addedMsg = ""; // "Request sent to …", kept across the redraw that follows adding a friend
 
 /**
  * Show the Friends tab in `box` (the list, or the friend last opened). While it
@@ -86,25 +87,56 @@ async function friendList(api: FriendsApi, box: HTMLElement, ctx: FriendsCtx): P
   const again = () => renderFriends(box, ctx);
 
   // you: nickname, code, invite link
-  const nick = el("input", "friends-input");
+  const nick = el("input", "friends-input nick-input");
   Object.assign(nick, { value: me.name, maxLength: NAME_MAX, placeholder: t("friendsNicknamePh"), autocomplete: "nickname" });
   nick.setAttribute("aria-label", t("friendsNickname"));
+  // Save: "Saving…", then a green "✓ Saved" until you edit the name again (or a moment passes)
+  let savedName = me.name;
+  let reset = 0;
+  const setSave = (state: "idle" | "saving" | "saved" | "failed") => {
+    clearTimeout(reset);
+    save.dataset.state = state;
+    save.disabled = state === "saving";
+    save.textContent =
+      state === "saving" ? t("friendsSaving") : state === "saved" ? `✓ ${t("friendsSavedShort")}` : state === "failed" ? t("friendsSaveFailed") : t("friendsSave");
+    if (state === "saved" || state === "failed") reset = window.setTimeout(() => setSave("idle"), 2200);
+  };
   const save = button(t("friendsSave"), async () => {
-    await api.setName(nick.value);
-    ctx.toast(t("friendsSaved"));
-  });
+    const name = nick.value.trim();
+    if (name === savedName) return setSave("saved"); // (nothing changed: still say it's saved)
+    setSave("saving");
+    try {
+      await api.setName(name);
+      savedName = name;
+      nick.value = name;
+      setSave("saved");
+    } catch {
+      setSave("failed");
+    }
+  }, "save-btn");
+  nick.addEventListener("input", () => save.dataset.state !== "saving" && setSave("idle"));
+  nick.addEventListener("keydown", (e) => e.key === "Enter" && save.click());
   const nickRow = el("div", "friends-row");
   nickRow.append(nick, save);
   const code = el("div", "friends-code");
   code.append(el("span", "", t("friendsCode")), el("strong", "", me.code));
+  // Copy invite link: "✓ Copied" for a moment (and the toast); if the browser won't copy, the toast shows the link
+  let copiedReset = 0;
   const copy = button(t("friendsCopyLink"), async () => {
     try {
       await navigator.clipboard.writeText(ctx.inviteUrl(me.code));
-      ctx.toast(t("friendsCopied"));
+      clearTimeout(copiedReset);
+      copy.textContent = `✓ ${t("friendsCopiedShort")}`;
+      copy.dataset.state = "copied";
+      copiedReset = window.setTimeout(() => {
+        copy.textContent = t("friendsCopyLink");
+        delete copy.dataset.state;
+      }, 2200);
     } catch {
-      ctx.toast(ctx.inviteUrl(me.code));
+      // (no clipboard access: hand them the link to copy themselves; a toast would sit behind the dialog)
+      prompt(t("friendsCopyLink"), ctx.inviteUrl(me.code));
     }
-  }, "link-btn");
+  }, "link-btn copy-btn");
   code.append(copy);
   const you = section(t("friendsYou"), nickRow, code);
 
@@ -113,6 +145,11 @@ async function friendList(api: FriendsApi, box: HTMLElement, ctx: FriendsCtx): P
   Object.assign(input, { placeholder: t("friendsCodePh"), autocapitalize: "characters", autocomplete: "off", spellcheck: false, maxLength: 12 });
   input.setAttribute("aria-label", t("friendsCodePh"));
   const msg = el("p", "small friends-msg");
+  if (addedMsg) {
+    msg.textContent = addedMsg;
+    msg.classList.add("ok");
+    addedMsg = "";
+  }
   const add = async () => {
     if (!cleanCode(input.value)) return input.focus();
     try {
@@ -124,7 +161,7 @@ async function friendList(api: FriendsApi, box: HTMLElement, ctx: FriendsCtx): P
         : r.status === "self" ? t("friendsAddSelf")
         : t("friendsAddNotFound");
       if (r.status === "accepted" || r.status === "pending") {
-        ctx.toast(msg.textContent);
+        addedMsg = msg.textContent; // (shown again, in green, once the list has redrawn with them in it)
         again();
       }
     } catch {

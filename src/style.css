@@ -2282,6 +2282,10 @@ dialog.stats {
   height: min(640px, calc(100dvh - var(--safe-top) - var(--safe-bottom) - 32px));
 }
 
+dialog.stats:focus {
+  outline: none;
+}
+
 /* ---- the stats dialog's tabs: Your stats | Friends (with no accounts, just the title) ---- */
 .stats-tabs {
   display: flex;
@@ -2357,6 +2361,53 @@ dialog.stats {
   font-size: 15px;
 }
 
+/* buttons in the Friends tab press in while held */
+.friends button:not(:disabled):not(.link-btn):not(.friend-open):active {
+  transform: scale(0.95);
+  filter: brightness(0.92);
+}
+
+.friends button {
+  transition: transform 0.08s ease, filter 0.08s ease, background-color 0.2s, color 0.2s;
+}
+
+/* Copy invite link: presses in, then "✓ Copied" in green */
+.copy-btn {
+  display: inline-block;
+  transition: transform 0.08s ease, opacity 0.08s ease, color 0.2s;
+}
+
+.copy-btn:active {
+  transform: scale(0.94);
+  opacity: 0.6;
+}
+
+.copy-btn[data-state="copied"] {
+  color: var(--good);
+  text-decoration: none;
+}
+
+/* the nickname's Save: "Saving…", then green "✓ Saved" */
+.save-btn {
+  min-width: 84px;
+  white-space: nowrap;
+}
+
+.save-btn[data-state="saving"] {
+  opacity: 0.7;
+}
+
+.save-btn[data-state="saved"] {
+  border-color: var(--good);
+  background: var(--good);
+  color: #fff;
+}
+
+.save-btn[data-state="failed"] {
+  border-color: #c0392b;
+  color: #c0392b;
+}
+
 .friends-code {
   display: flex;
   flex-wrap: wrap;
@@ -2381,6 +2432,11 @@ dialog.stats {
 .friends-msg {
   min-height: 1.4em;
   margin: 6px 0 0;
+}
+
+.friends-msg.ok {
+  color: var(--good);
+  font-weight: 600;
 }
 
 /* plain rows with thin lines between them; a long friend list scrolls */

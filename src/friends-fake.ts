@@ -7,7 +7,7 @@
  * today's three rings in this browser. One friend hides their spots and one
  * hasn't played today, so every case shows up.
  */
-import type { AddResult, Friend, FriendsApi, Profile, TodayView } from "./friends";
+import { cleanCode, type AddResult, type Friend, type FriendsApi, type Profile, type TodayView } from "./friends";
 import { accuracy, dayRings, gradeRing, score, todaysNumber, type Stage } from "./puzzle";
 import { questFor } from "./quests";
 import { loadResult, type Result } from "./storage";
@@ -81,7 +81,8 @@ export function fakeFriends(): FriendsApi {
       me.name = name.trim().slice(0, 24);
     },
     list: () => later(friends.map(({ id, name, status }) => ({ id, name, status }))),
-    async add(code): Promise<AddResult> {
+    async add(typed): Promise<AddResult> {
+      const code = cleanCode(typed); // (as the database does)
       if (code === me.code) return { status: "self" };
       if (code !== "ABC234") return later({ status: "not_found" });
       friends.push({ id: "f6", name: "Priya", status: "outgoing", rings: [] });

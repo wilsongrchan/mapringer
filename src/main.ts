@@ -1892,7 +1892,11 @@ function openStats(tab: "stats" | "friends" = "stats") {
   renderStats($("stats-body"), currentStats());
   $("tab-friends").hidden = !friendsPossible();
   showStatsTab(tab, true);
-  if (!statsDialog.open) statsDialog.showModal();
+  if (!statsDialog.open) {
+    statsDialog.showModal();
+    // (focus the dialog, not its first button: no focus ring on "Your stats" when it opens; Tab still reaches everything)
+    statsDialog.focus();
+  }
 }
 function showStatsTab(tab: "stats" | "friends", fresh = false) {
   const friends = tab === "friends" && friendsPossible();
