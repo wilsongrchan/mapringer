@@ -2008,6 +2008,8 @@ function goPractice(on: boolean, replayDay?: number) {
   for (const k of ["practice", "day", "unlimited"]) url.searchParams.delete(k);
   if (on) url.searchParams.set("practice", "");
   if (on && replayDay) url.searchParams.set("day", String(replayDay));
+  // (the dev server plays test mode by default: back to today's rings means the real ones)
+  if (!on && import.meta.env.DEV) url.searchParams.set("unlimited", "0");
   location.href = url.toString();
 }
 $("replay-btn").addEventListener("click", () => goPractice(true, day));
@@ -2092,16 +2094,20 @@ function pickMap(): Promise<Difficulty> {
       if (!btn) return;
       mapDialog.removeEventListener("click", onClick);
       picking = false;
+      document.body.classList.remove("picking-map");
       mapDialog.close();
       resolve(btn.dataset.map as Difficulty);
     };
     mapDialog.addEventListener("click", onClick);
     picking = true;
+    document.body.classList.add("picking-map");
     openPicker();
   });
 }
 
 if (!dayMap && !dayDone()) {
+  // no ring until there's a map to play it on (also under a first visit's how-to-play)
+  document.body.classList.add("picking-map");
   const ask = () =>
     pickMap().then((d) => {
       dayMap = d;

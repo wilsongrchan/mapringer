@@ -262,6 +262,8 @@ function render(view = null) {
     }
     if (d.bottom) { const hb = document.createElement("div"); hb.className = "homebar"; screen.append(hb); }
 
+    // on every load, not just the first: the game reloads itself (language switch, leaving practice)
+    iframe.addEventListener("load", () => injectSafeArea(iframe, safeTop, safeBottom));
     frames.push({ iframe, top: safeTop, bottom: safeBottom });
 
     phone.append(screen);

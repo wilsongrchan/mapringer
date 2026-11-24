@@ -99,6 +99,7 @@ a {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 8px; /* (the name never touches the buttons) */
   background: var(--card);
   border-bottom: 1px solid var(--border);
   box-shadow: 0 1px 10px rgba(0, 0, 0, 0.08);
@@ -1789,6 +1790,18 @@ dialog.map-pick .small {
   white-space: nowrap;
 }
 
+/* narrow phones in practice: "← Today's rings" and the three buttons still fit beside the name */
+@media (max-width: 400px) {
+  .top-actions {
+    gap: 6px;
+  }
+
+  .pill-btn {
+    padding: 0 10px;
+    font-size: 12.5px;
+  }
+}
+
 /* the streak under the day's total; taps through to the stats */
 .streak-line {
   display: block;
@@ -2174,6 +2187,11 @@ dialog.stats .small {
 .code-help {
   margin: 2px 0 0;
   text-align: center;
+}
+
+/* picking the day's map: no ring yet (the challenge, the ring, its buttons) until there's a map */
+body.picking-map :is(.challenge, .ring-overlay, .crosshair, .lock-wrap) {
+  visibility: hidden;
 }
 
 /* ---- the map picker isn't modal: it and its shade sit below the header, which stays usable ---- */
