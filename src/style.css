@@ -157,7 +157,36 @@ a {
 
 .challenge-line {
   font-size: 19px;
-  margin-top: 2px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+}
+
+/* one row: the ring number badge, then the challenge */
+.challenge-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* "1/3": the ring number big and bold, "/3" small, a thin rule after it */
+.ring-no {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  padding-right: 12px;
+  border-right: 1px solid var(--border);
+  line-height: 1;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.ring-no strong {
+  font-size: 28px;
+  font-weight: 800;
+  color: var(--fg);
+  letter-spacing: -0.02em;
 }
 
 .challenge-line strong {
@@ -215,15 +244,22 @@ a {
   padding: 16px;
 }
 
+/* The results panel is two equal columns all the way down (the numbers, the
+   bar | the score, the description | the button, the two buttons at the
+   bottom), with one gap, so everything lines up. */
+.result {
+  --col-gap: 12px;
+}
+
 .result-grid {
   display: grid;
   /* minmax(0, …): long one-line place names get "…" instead of widening the panel */
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  gap: 12px;
+  gap: var(--col-gap);
 }
 
 .big {
-  font-size: 26px;
+  font-size: 21px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
@@ -232,12 +268,50 @@ a {
   color: var(--muted);
 }
 
+/* the off-by bar, then the level emoji and the points */
+/* the bar | the score, then how far off + a comment | the button */
+.score-row,
+.verdict-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  align-items: center;
+  column-gap: var(--col-gap);
+}
+
 .score-row {
+  margin-top: 12px;
+  font-size: 20px;
+}
+
+.verdict-row {
+  margin-top: 10px;
+}
+
+.score {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-top: 10px;
-  font-size: 20px;
+  justify-content: center;
+  gap: 8px;
+}
+
+.score .bar {
+  line-height: 1;
+}
+
+.verdict-text {
+  min-width: 0;
+}
+
+.cta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.cta .primary {
+  width: 100%;
+  padding: 10px 8px;
+  white-space: nowrap;
 }
 
 .acc {
@@ -246,9 +320,10 @@ a {
 }
 
 .verdict {
-  margin: 6px 0 12px;
+  margin: 2px 0 0;
   color: var(--muted);
   font-size: 14px;
+  line-height: 1.35;
 }
 
 .actions {
@@ -365,7 +440,9 @@ dialog ol {
 .gauge {
   --pos: 50%;
   --fill: 0;
-  margin: 12px 4px 0;
+  flex: 1;
+  min-width: 0;
+  margin: 0; /* (the track lines up with the column; its dot may reach into the padding) */
 }
 
 .gauge-track {
@@ -452,26 +529,14 @@ dialog ol {
   transition: transform 1s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-.gauge-labels {
-  position: relative;
-  height: 16px;
-  margin-top: 6px;
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.gauge-labels span {
-  position: absolute;
-  transform: translateX(-50%);
-  white-space: nowrap;
-}
-
-
+/* always one line: main.ts fitCaption shrinks the font to fit */
 .gauge-caption {
-  margin: 4px 0 0;
-  font-size: 14px;
+  margin: 0;
+  font-size: 15px;
   font-weight: 600;
-  text-align: center;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
 }
 
 /* ---- difficulty picker ---- */
@@ -512,7 +577,6 @@ dialog ol {
 }
 
 .points {
-  margin-left: auto;
   font-size: 15px;
   color: var(--muted);
 }
@@ -522,8 +586,14 @@ dialog ol {
   color: var(--accent);
 }
 
+/* the points as big as the emoji beside them */
 .points strong {
-  font-size: 20px;
+  font-size: 26px;
+  line-height: 1;
+}
+
+.score .bar {
+  font-size: 24px;
 }
 
 .place {
@@ -551,15 +621,6 @@ dialog ol {
   font-style: italic;
 }
 
-.gauge-caption .verdict {
-  font-weight: 400;
-  color: var(--muted);
-}
-
-.result .gauge-caption {
-  margin-bottom: 10px;
-}
-
 .answer-place::before {
   content: "";
   position: absolute;
@@ -571,7 +632,7 @@ dialog ol {
   border: 2px solid var(--good);
 }
 
-.score-row .bar,
+.score .bar,
 .points {
   white-space: nowrap;
 }
@@ -610,7 +671,7 @@ dialog ol {
   }
 }
 
-/* ---- mobile: collapsible results panel ---- */
+/* ---- phones: the results panel is a bottom sheet (main.ts sheet) ---- */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -622,15 +683,14 @@ dialog ol {
 
 .result-toggle {
   display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 8px;
   width: calc(100% + 32px);
-  margin: -16px -16px 4px;
-  padding: 10px 16px 6px;
+  margin: -16px -16px 0;
+  padding: 10px 16px 10px;
   border: none;
   border-radius: var(--radius) var(--radius) 0 0;
-  position: relative;
+  background: transparent;
+  cursor: grab;
 }
 
 .result-toggle .grab {
@@ -641,56 +701,76 @@ dialog ol {
   box-shadow: inset 0 0 0 1px var(--border);
 }
 
-.result-toggle .result-summary,
-.result-toggle .chev {
-  display: none;
+/* the details slide shut under a one-line summary (JS sets the height); they're
+   clipped only while moving or shut, so the gauge's dot and its off-scale arrow
+   can reach into the panel's padding */
+.result-body {
+  position: relative;
+  overflow: hidden;
 }
 
-.result.collapsed {
-  padding-bottom: 10px;
+.result:not(.collapsed):not(.dragging):not(.sliding) .result-body {
+  overflow: visible;
 }
 
-.result.collapsed .result-details {
-  display: none;
-}
-
-.result.collapsed .result-toggle {
-  justify-content: space-between;
-  margin-bottom: 0;
-  padding: 12px 16px 2px;
-}
-
-.result.collapsed .grab {
+.result-summary {
   position: absolute;
-  top: 5px;
-  left: 50%;
-  margin-left: -20px;
+  top: 0;
+  left: 0;
+  right: 0;
+  font-size: 15px;
+  line-height: 1.4;
+  padding-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .result.collapsed .result-summary {
-  display: block;
-  font-size: 15px;
-  white-space: nowrap;
+  pointer-events: auto;
+  cursor: pointer;
 }
 
-.result.collapsed .chev {
-  display: block;
-  color: var(--muted);
+.result.collapsed .result-details {
+  visibility: hidden; /* (shut: out of the tab order too) */
 }
 
-.result.collapsed .chev::before {
-  content: "▴";
-  font-size: 16px;
+.result.dragging .result-details {
+  visibility: visible;
 }
 
-/* wide screens use the left column instead; no toggle there */
+/* the whole sheet takes swipes (the page itself never scrolls) */
+.result {
+  touch-action: none;
+}
+
+.result.dragging,
+.result.dragging * {
+  cursor: grabbing;
+  user-select: none;
+}
+
+/* wide screens use the left column instead: no handle, always open */
 @media (min-width: 800px) {
-  .result-toggle {
+  .result-toggle,
+  .result-summary {
     display: none;
   }
 
-  .result.collapsed .result-details {
-    display: block;
+  .result-body {
+    height: auto !important;
+  }
+
+  .result .result-details {
+    opacity: 1 !important;
+    visibility: visible;
+  }
+
+  .result {
+    touch-action: auto;
   }
 }
 
@@ -703,15 +783,15 @@ dialog ol {
 /* result numbers: smaller on phones, and smaller still for very long numbers */
 @media (max-width: 799px) {
   .big {
-    font-size: 21px;
-  }
-
-  .big.long {
     font-size: 18px;
   }
 
-  .big.very-long {
+  .big.long {
     font-size: 16px;
+  }
+
+  .big.very-long {
+    font-size: 14px;
   }
 }
 
@@ -989,20 +1069,6 @@ dialog {
   font-size: 14px;
 }
 
-/* swipeable handle: the browser shouldn't scroll or zoom while dragging it */
-.result-toggle {
-  touch-action: none;
-  cursor: grab;
-}
-
-.result {
-  transition: transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.result.dragging {
-  transition: none;
-}
-
 /* ---- the quest: part of the challenge, an invitation rather than small print ---- */
 .quest {
   margin-top: 8px;
@@ -1080,10 +1146,36 @@ dialog {
   color: var(--muted);
 }
 
+/* under the two numbers: the quest line and the closest ring that does it.
+   Both lines are always there (one line each), so the panel doesn't jump when
+   the search finishes or finds the player's own ring already does it. */
+.quest-lines {
+  margin-top: 8px;
+}
+
 .quest-result {
-  margin: -6px 0 10px;
-  font-size: 14px;
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
   color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.quest-lines .quest-answer {
+  margin: 0;
+  line-height: 1.45;
+}
+
+/* (no closest ring to show: keep its line) */
+.quest-lines .quest-answer[hidden] {
+  display: block;
+  visibility: hidden;
+}
+
+.quest-lines .quest-answer:empty::before {
+  content: "\00a0";
 }
 
 /* the quest's sample ring (gold on the map) */
@@ -1164,13 +1256,16 @@ dialog {
     font-size: 15px;
   }
 
-  /* the challenge line already says it's today's ring; twists keep their label */
-  #challenge-label:not(.twist) {
-    display: none;
+  .ring-no {
+    padding-right: 10px;
   }
 
-  #challenge-label.twist {
-    font-size: 11px;
+  .ring-no strong {
+    font-size: 24px;
+  }
+
+  .challenge-head {
+    gap: 10px;
   }
 
   .quest {
@@ -1278,20 +1373,20 @@ dialog.confirm .dialog-actions button {
     font-size: 11px;
   }
 
-  .result-grid {
-    gap: 8px;
+  .result {
+    --col-gap: 8px;
   }
 
   .big {
-    font-size: 18px;
-  }
-
-  .big.long {
     font-size: 16px;
   }
 
+  .big.long {
+    font-size: 15px;
+  }
+
   .big.very-long {
-    font-size: 14px;
+    font-size: 13px;
   }
 
   .place {
@@ -1299,9 +1394,19 @@ dialog.confirm .dialog-actions button {
   }
 
   .score-row {
-    margin-top: 6px;
+    margin-top: 10px;
+    font-size: 17px;
+  }
+
+
+
+  .verdict-row {
+    margin-top: 8px;
+  }
+
+  .cta .primary {
+    padding: 9px 8px;
     font-size: 15px;
-    gap: 8px;
   }
 
   .points {
@@ -1309,31 +1414,29 @@ dialog.confirm .dialog-actions button {
   }
 
   .points strong {
-    font-size: 16px;
+    font-size: 24px;
   }
 
-  .gauge {
-    margin-top: 8px;
-  }
-
-  .gauge-labels {
-    height: 14px;
-    margin-top: 4px;
-    font-size: 10px;
+  .score .bar {
+    font-size: 22px;
   }
 
   .gauge-caption {
-    font-size: 13px;
+    font-size: 14px;
   }
 
   .verdict {
-    margin: 2px 0 8px;
     font-size: 13px;
+  }
+
+  .result-toggle {
+    margin-bottom: 0;
+    padding-bottom: 8px;
   }
 
   .answer-line,
   .quest-result {
-    font-size: 13px;
+    font-size: 12.5px;
   }
 
   .answer-line {
@@ -1380,6 +1483,27 @@ dialog.confirm .dialog-actions button {
   font-size: 12px;
   text-align: center;
   color: var(--muted);
+}
+
+/* help: scoring levels, one per line */
+.score-key {
+  list-style: none;
+  margin: 6px 0 12px;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.score-key li {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+
+.score-key li > span {
+  flex: none;
+  width: 1.3em;
+  text-align: center;
 }
 
 /* ---- Game Rabbit logo (Game_Site/BRANDING.md) ---- */
@@ -1503,12 +1627,12 @@ dialog.card {
   font-variant-numeric: tabular-nums;
 }
 
-.quest-result {
-  margin-top: 0;
-}
-
 /* ---- lock in: a glowing orange ring, bottom right ---- */
 .lock-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
   position: fixed;
   right: calc(env(safe-area-inset-right, 0px) + 20px);
   /* clear of the map credits along the bottom edge */
@@ -1717,8 +1841,13 @@ dialog.stats h3 {
   line-height: 1.2;
 }
 
+/* each section (last 30 days, your rings, by map) set well apart */
 .stat-section {
-  margin-bottom: 12px;
+  margin-bottom: 24px;
+}
+
+.stat-section:last-child {
+  margin-bottom: 8px;
 }
 
 .stat-chart {
@@ -1751,6 +1880,32 @@ dialog.stats h3 {
 .stat-chart .axis {
   stroke: var(--muted);
   stroke-opacity: 0.5;
+}
+
+.stat-chart .tick {
+  font-size: 8px;
+  fill: var(--muted);
+  text-anchor: end;
+  font-variant-numeric: tabular-nums;
+}
+
+/* your average: a dashed line in the text colour, labelled at the right end */
+.stat-chart .avg {
+  stroke: var(--fg);
+  stroke-opacity: 0.7;
+  stroke-width: 1.2;
+  stroke-dasharray: 5 3;
+}
+
+.stat-chart .avg-label {
+  font-size: 8.5px;
+  font-weight: 700;
+  fill: var(--fg);
+  text-anchor: end;
+  paint-order: stroke;
+  stroke: var(--card);
+  stroke-width: 3px;
+  stroke-linejoin: round;
 }
 
 .stat-caption {
@@ -1903,7 +2058,11 @@ dialog.stats .small {
 }
 
 .challenge.has-quest .challenge-line {
-  padding: 0 22px; /* room for the toggle, both sides so the line stays centred */
+  padding-right: 22px; /* room for the toggle */
+}
+
+.challenge.collapsed.has-quest .challenge-line {
+  padding-right: 42px; /* room for the star and the toggle */
 }
 
 .challenge-toggle {
@@ -1937,7 +2096,6 @@ dialog.stats .small {
   cursor: pointer;
 }
 
-.challenge.collapsed #challenge-label,
 .challenge.collapsed .quest {
   display: none;
 }
@@ -1955,40 +2113,35 @@ dialog.stats .small {
 .challenge.collapsed.has-quest::before {
   content: "★";
   position: absolute;
-  left: 12px;
+  right: 34px;
   top: 50%;
   transform: translateY(-50%);
   color: #f5b700;
   font-size: 14px;
 }
 
-/* ---- a finished day: Share + countdown, then Other maps + Practice on their own row ---- */
-.actions-break {
+/* ---- under the results: Other maps / Practice and the countdown (a finished day), or test-mode buttons ---- */
+.actions {
+  margin-top: 12px;
+}
+
+/* (the results panel's column gap, so the buttons line up with the columns above) */
+.result .actions {
+  gap: var(--col-gap);
+}
+
+/* nothing to show: no row */
+.actions:not(:has(> :not([hidden]))) {
   display: none;
 }
 
-.actions.day-done {
-  flex-wrap: wrap;
-}
-
-.actions.day-done #share-btn {
-  order: 0;
-}
-
-.actions.day-done .next {
-  order: 1;
-}
-
-.actions.day-done .actions-break {
-  display: block;
-  order: 2;
-  flex-basis: 100%;
-  height: 0;
-}
-
-.actions.day-done #replay-btn,
-.actions.day-done #practice-btn {
-  order: 3;
+/* practice / test mode's Retry this ring / New 3 rings: low buttons sharing the panel's width */
+.actions #again-btn,
+.actions #new-btn {
+  flex: 1 1 0;
+  padding: 7px 12px;
+  font-size: 13px;
+  border-radius: 10px;
 }
 
 /* the map picker's last line: playing as a guest (sign in) or signed in */
@@ -2066,4 +2219,34 @@ dialog.map-pick[open]:not(:modal) {
   .signin-title .grm.dk {
     display: block;
   }
+}
+
+/* while placing: zoom back out (above the lock-in ring, in its style: a hollow
+   white ring, the map showing through; a soft shadow keeps it visible on light maps) */
+.globe-btn {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border-radius: 50%;
+  border: 4px solid #fff;
+  background: transparent;
+  color: #fff;
+  filter: drop-shadow(0 0 2px rgba(0, 0, 0, 0.45)) drop-shadow(0 1px 4px rgba(0, 0, 0, 0.3));
+  cursor: pointer;
+}
+
+.globe-btn:active {
+  transform: scale(0.94);
+}
+
+.globe-btn svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }

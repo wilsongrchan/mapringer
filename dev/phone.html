@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Phone Preview</title>
+<title>MapRinger preview</title>
 <style>
   :root {
     --bg: #e9eaee; --panel: #ffffff; --text: #1d1d1f; --muted: #6e6e73; --line: #d2d2d7;
@@ -34,7 +34,7 @@
     padding: 20px; overflow: auto; }
   .device { flex: none; display: flex; flex-direction: column; align-items: center; gap: 8px; }
   .device .name { color: var(--muted); font-size: 12px; }
-  .scaler { transform-origin: top left; }
+  .scaler { transform-origin: top left; width: max-content; }
   .phone { position: relative; background: var(--frame); padding: 12px; border-radius: var(--outer-r);
     box-shadow: 0 0 0 2px #000 inset, 0 20px 50px rgba(0,0,0,.25); }
   .screen { position: relative; overflow: hidden; border-radius: var(--inner-r); background: #000;
@@ -61,11 +61,19 @@
   .se-chin i { width: 46px; height: 46px; border-radius: 50%; border: 2px solid #555; }
   .se-brow { height: 60px; }
   .hint { color: var(--muted); padding: 0 16px 12px; text-align: center; }
+  .bar.views { border-top: 0; padding-top: 0; }
+  .views button.on { border-color: var(--accent); color: var(--accent); }
+  .views .status-line { color: var(--muted); }
+  .views select { font: inherit; padding: 4px 8px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--panel); color: inherit; max-width: 420px; }
+  .desktop { position: relative; background: var(--frame); padding: 12px; border-radius: 14px;
+    box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+  .desktop .screen { border-radius: 4px; }
 </style>
 </head>
 <body>
 <div class="bar">
-  <b>Phone preview</b>
+  <b>Preview</b>
   <div class="group" id="devices"><span>Devices</span></div>
   <div class="group"><span>Mode</span>
     <label class="chip"><input type="radio" name="mode" value="safari" checked> Safari</label>
@@ -80,9 +88,21 @@
     <label class="chip"><input type="radio" name="zoom" value="1"> 100%</label>
   </div>
 </div>
+<!-- jump straight to a state of the game (dev-preview-views.js): no playing through to get there -->
+<div class="bar views">
+  <div class="group"><span>Lang</span>
+    <label class="chip"><input type="radio" name="lang" value="en" checked> EN</label>
+    <label class="chip"><input type="radio" name="lang" value="zh"> 中</label>
+  </div>
+  <div class="group" id="views"><span>Views</span></div>
+  <!-- every quest the rings use, past and upcoming: opens its ring (dev/preview-views.js) -->
+  <div class="group"><span>Quest</span><select id="quests"></select></div>
+  <span class="status-line" id="view-status"></span>
+</div>
 <div class="stage" id="stage"></div>
 <div class="hint">Mouse drag = one-finger pan; scroll = zoom. Notch and home-bar spacing is applied through the app's --safe-top / --safe-bottom variables. For real touch, pinch and Safari behaviour, open the LAN URL on your iPhone.</div>
 
+<script type="module" src="./preview-views.js"></script>
 <script>
 // CSS viewport sizes (points). Safe-area values are portrait insets in standalone/full-screen mode.
 const DEVICES = [
@@ -91,6 +111,7 @@ const DEVICES = [
   { id: "16e",   name: "iPhone 16e",          w: 390, h: 844, top: 47, bottom: 34, kind: "notch",  r: 47 },
   { id: "16",    name: "iPhone 16 / 17",      w: 393, h: 852, top: 59, bottom: 34, kind: "island", r: 55 },
   { id: "pmax",  name: "iPhone 16 Pro Max",   w: 440, h: 956, top: 62, bottom: 34, kind: "island", r: 62 },
+  { id: "desk",  name: "Desktop",             w: 1440, h: 900, top: 0, bottom: 0, kind: "desktop", r: 0 },
 ];
 const SAFARI_BAR = 50; // approx. collapsed-address-bar height above the home-indicator area
 
@@ -110,7 +131,7 @@ for (const d of DEVICES) {
 }
 const pathEl = document.getElementById("path");
 pathEl.value = store.get("path", "/");
-for (const n of ["mode", "zoom"]) {
+for (const n of ["mode", "zoom", "lang"]) {
   const v = store.get(n, null);
   if (v) document.querySelector(`input[name=${n}][value="${v}"]`)?.click();
 }
@@ -140,17 +161,56 @@ function statusBar(d, overlay) {
   return el;
 }
 
-function render() {
+/** The frames on screen and the insets each needs, in render order. */
+let frames = [];
+
+/**
+ * Build the device frames, then load the page into them one by one. `view`
+ * (from the Views row) can set the game's state just before each frame loads
+ * (`before`) and act on it once loaded (`after`).
+ */
+function render(view = null) {
   const stage = document.getElementById("stage");
   stage.innerHTML = "";
+  frames = [];
   const mode = opt("mode"), zoom = opt("zoom");
   const ids = [...devBox.querySelectorAll("input:checked")].map(i => i.value);
-  store.set("devices", ids); store.set("mode", mode); store.set("zoom", zoom); store.set("path", pathEl.value);
+  store.set("devices", ids); store.set("mode", mode); store.set("zoom", zoom); store.set("path", pathEl.value); store.set("lang", opt("lang"));
   const list = DEVICES.filter(d => ids.includes(d.id));
   if (!list.length) { stage.textContent = "Pick at least one device."; return; }
 
   const avail = stage.clientHeight - 40 - 24;
+  // the desktop gets whatever width the phones leave
+  const phonesW = list.filter(d => d.kind !== "desktop").reduce((n, d) => n + (d.w + 24) * Math.min(1, avail / (d.h + 24)) + 32, 0);
   for (const d of list) {
+    if (d.kind === "desktop") {
+      const W = d.w + 24, H = d.h + 24;
+      const scale = zoom === "fit" ? Math.max(0.2, Math.min(1, avail / H, (stage.clientWidth - 40 - phonesW) / W)) : 1;
+      const wrap = document.createElement("div");
+      wrap.className = "device";
+      wrap.innerHTML = `<div class="name">${d.name} · ${d.w}×${d.h} · ${Math.round(scale * 100)}%</div>`;
+      const holder = document.createElement("div");
+      holder.style.width = W * scale + "px";
+      holder.style.height = H * scale + "px";
+      const scaler = document.createElement("div");
+      scaler.className = "scaler";
+      scaler.style.transform = `scale(${scale})`;
+      const box = document.createElement("div");
+      box.className = "desktop";
+      const screen = document.createElement("div");
+      screen.className = "screen";
+      screen.style.width = d.w + "px";
+      screen.style.height = d.h + "px";
+      const iframe = document.createElement("iframe");
+      screen.append(iframe);
+      box.append(screen);
+      scaler.append(box);
+      holder.append(scaler);
+      wrap.append(holder);
+      stage.append(wrap);
+      frames.push({ iframe, top: 0, bottom: 0 });
+      continue;
+    }
     const isSE = d.kind === "home";
     const phoneW = d.w + 24, phoneH = d.h + 24 + (isSE ? 130 : 0);
     const scale = zoom === "fit" ? Math.min(1, avail / phoneH) : 1;
@@ -202,8 +262,7 @@ function render() {
     }
     if (d.bottom) { const hb = document.createElement("div"); hb.className = "homebar"; screen.append(hb); }
 
-    iframe.addEventListener("load", () => injectSafeArea(iframe, safeTop, safeBottom));
-    iframe.src = pathEl.value || "/";
+    frames.push({ iframe, top: safeTop, bottom: safeBottom });
 
     phone.append(screen);
     if (isSE) phone.insertAdjacentHTML("beforeend", `<div class="se-chin"><i></i></div>`);
@@ -212,10 +271,36 @@ function render() {
     wrap.append(holder);
     stage.append(wrap);
   }
+  loadFrames(view);
 }
 
+/** The path with the Lang choice applied. */
+function withLang(path) {
+  const u = new URL(path || "/", location.origin);
+  u.searchParams.set("lang", opt("lang"));
+  return u.pathname + u.search;
+}
+
+let loadRun = 0;
+async function loadFrames(view) {
+  const run = ++loadRun;
+  const path = withLang(view?.path ?? pathEl.value);
+  for (const f of frames) {
+    if (run !== loadRun) return; // a newer render took over
+    // (sessionStorage is shared with the frames: each frame's state is set just before it loads)
+    if (view?.before) await view.before();
+    await new Promise((resolve) => {
+      f.iframe.addEventListener("load", resolve, { once: true });
+      f.iframe.src = path;
+    });
+    injectSafeArea(f.iframe, f.top, f.bottom);
+    if (view?.after) view.after(f.iframe).catch((e) => console.warn(e));
+  }
+}
+window.previewRender = render;
+
 document.querySelector(".bar").addEventListener("change", e => { if (e.target.id !== "path") render(); });
-document.getElementById("reload").addEventListener("click", render);
+document.getElementById("reload").addEventListener("click", () => render());
 pathEl.addEventListener("keydown", e => { if (e.key === "Enter") render(); });
 let t; addEventListener("resize", () => { clearTimeout(t); t = setTimeout(render, 150); });
 setInterval(() => document.querySelectorAll(".status > span:first-child").forEach(s => s.textContent = clock()), 30000);

@@ -57,8 +57,10 @@
       <button class="challenge-toggle" id="challenge-toggle" aria-expanded="true" data-i18n-label="hideChallenge" aria-label="Hide the details">
         <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M2.5 7.5 6 4l3.5 3.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" /></svg>
       </button>
-      <div class="label" id="challenge-label">Today's ring</div>
-      <div class="challenge-line" id="challenge-line">
+      <!-- which ring: a big "1" with a small "/3", then the one-line challenge -->
+      <div class="challenge-head">
+        <div class="ring-no" id="ring-no" role="img"><strong id="ring-no-n">1</strong><span>/3</span></div>
+        <div class="challenge-line" id="challenge-line"></div>
       </div>
       <!-- tap the quest to see where it's about (or, after lock-in, the gold ring that does it) -->
       <div class="quest" id="quest">
@@ -71,6 +73,10 @@
 
     <!-- lock in: a glowing ring-shaped button, bottom right -->
     <div class="lock-wrap" id="play-panel">
+      <!-- back out to the whole globe -->
+      <button class="globe-btn" id="globe-btn" data-i18n-label="zoomOutLabel" aria-label="Zoom out to the whole globe">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3v6h6M9 21v-6H3" /></svg>
+      </button>
       <button class="lock-ring" id="lock-btn" data-i18n-label="lockIn" aria-label="Lock in ring">
         <span class="lock-ring-label" data-i18n="lockInShort">Lock in</span>
       </button>
@@ -78,13 +84,15 @@
 
     <footer class="bottom">
 
+      <!-- a bottom sheet on phones: drag the handle (or tap it) and the details slide shut to a one-line summary (main.ts) -->
       <div class="card result" id="result-panel" hidden>
         <button class="result-toggle" id="result-toggle" aria-expanded="true" aria-controls="result-details">
           <span class="grab" aria-hidden="true"></span>
-          <span class="result-summary" id="result-summary"></span>
-          <span class="chev" aria-hidden="true"></span>
           <span class="sr-only" id="result-toggle-label" data-i18n="hideResults">Hide results</span>
         </button>
+        <div class="result-body" id="result-body">
+        <!-- collapsed: just this line (fades in as the details slide shut) -->
+        <div class="result-summary" id="result-summary" aria-hidden="true"></div>
         <div class="result-details" id="result-details">
         <div class="result-grid">
           <div>
@@ -99,21 +107,36 @@
             <div class="place answer-place" id="answer-place"></div>
           </div>
         </div>
+        <!-- rings with a quest: done or not, then the closest ring that does it (gold on the map).
+             Always two lines tall, so nothing jumps while the search runs. -->
+        <div class="quest-lines" id="quest-lines" hidden>
+          <p class="quest-result" id="quest-result"></p>
+          <p class="place quest-answer" id="quest-answer" hidden></p>
+        </div>
+        <!-- the off-by bar, then the level and the points; the right column is shared with the button below -->
         <div class="score-row">
-          <span class="bar" id="result-bar"></span>
-          <span class="points" id="result-points"></span>
-        </div>
-        <div class="gauge" id="gauge" aria-hidden="true">
-          <div class="gauge-track" id="gauge-track">
-            <div class="gauge-target"></div>
-            <div class="gauge-marker" id="gauge-marker"></div>
+          <div class="gauge" id="gauge" aria-hidden="true">
+            <div class="gauge-track" id="gauge-track">
+              <div class="gauge-target"></div>
+              <div class="gauge-marker" id="gauge-marker"></div>
+            </div>
           </div>
-          <div class="gauge-labels" id="gauge-labels"></div>
+          <div class="score">
+            <span class="bar" id="result-bar"></span>
+            <span class="points" id="result-points"></span>
+          </div>
         </div>
-        <p class="gauge-caption" id="gauge-caption"></p>
-        <p class="quest-result" id="quest-result" hidden></p>
-        <!-- quest not done: a sample ring that hits the target and does the quest (gold on the map) -->
-        <p class="place quest-answer" id="quest-answer" hidden></p>
+        <!-- how far off and a comment, then what's next -->
+        <div class="verdict-row">
+          <div class="verdict-text">
+            <p class="gauge-caption" id="gauge-caption"></p>
+            <p class="verdict" id="verdict"></p>
+          </div>
+          <div class="cta">
+            <button class="primary" id="next-btn" data-i18n="nextRing" hidden>Next ring →</button>
+            <button class="primary" id="share-btn" data-i18n="shareResult" hidden>Share result</button>
+          </div>
+        </div>
         <!-- the day's three rings and total, once all three are played -->
         <div class="day-summary" id="day-summary" hidden>
           <ol class="day-rows" id="day-rows"></ol>
@@ -121,17 +144,14 @@
           <button class="streak-line" id="streak-line" hidden></button>
         </div>
         <div class="actions">
-          <button class="primary" id="share-btn" data-i18n="shareResult" hidden>Share result</button>
           <!-- once the day is done: today's rings again on another map, or a practice round (nothing saved) -->
-          <span class="actions-break" aria-hidden="true"></span>
           <button id="replay-btn" data-i18n="otherMaps" data-i18n-label="otherMapsLabel" hidden>Other maps</button>
           <button id="practice-btn" data-i18n="practice" hidden>Practice</button>
           <!-- test mode only -->
           <button id="again-btn" data-i18n="tryAgain" hidden>Try again</button>
           <button id="new-btn" data-i18n="newPuzzle" hidden>New puzzle</button>
-          <!-- rightmost: it moves you on -->
-          <button class="primary" id="next-btn" data-i18n="nextRing" hidden>Next ring →</button>
-          <div class="next" id="next-info"><span data-i18n="nextRingIn">Next ring in</span> <span id="countdown"></span></div>
+          <div class="next" id="next-info" hidden><span data-i18n="nextRingIn">Next ring in</span> <span id="countdown"></span></div>
+        </div>
         </div>
         </div>
       </div>
@@ -167,7 +187,7 @@
         <figure><img src="help/map-standard.jpg" alt="" width="240" height="240" loading="lazy" /><figcaption data-i18n="diffStandard">Standard</figcaption></figure>
         <figure><img src="help/map-hard.jpg" alt="" width="240" height="240" loading="lazy" /><figcaption data-i18n="diffHard">Hard</figcaption></figure>
       </div>
-      <p class="small" data-i18n-html="helpScoring"></p>
+      <div class="small" data-i18n-html="helpScoring"></div>
 
       <details class="credits">
         <summary data-i18n-html="credits">Credits &amp; licences</summary>

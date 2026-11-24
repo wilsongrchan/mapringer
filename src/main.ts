@@ -84,7 +84,10 @@ function nextStage(): Stage {
   const i = results.findIndex((r) => !r);
   return (i < 0 ? 2 : i) as Stage;
 }
-let stage: Stage = carriedTest?.stage ?? nextStage();
+// dev only (the preview's views, dev/preview-views.js): ?stage=0|1|2 opens that ring
+// of the day, showing its saved result if it has one, instead of the first unplayed ring
+const devStage = import.meta.env.DEV && ["0", "1", "2"].includes(params.get("stage") ?? "") ? (Number(params.get("stage")) as Stage) : null;
+let stage: Stage = carriedTest?.stage ?? devStage ?? nextStage();
 let puzzle: Puzzle = rings[stage];
 let practice = carriedTest?.practice ?? startRandom; // true once we've moved on to random days
 const dayDone = () => results.every(Boolean);
@@ -120,6 +123,8 @@ const map = new maplibregl.Map({
   style: { version: 8, sources: {}, layers: [], projection: GLOBE },
   center: carried?.camera.center ?? [10, 25],
   zoom: carried?.camera.zoom ?? wholeGlobeZoom(),
+  // never smaller than the whole globe filling the screen (see the resize below)
+  minZoom: wholeGlobeZoom(),
   attributionControl: false, // added bottom-left below, clear of the lock-in button
   dragRotate: false,
   pitchWithRotate: false,
@@ -130,8 +135,91 @@ const map = new maplibregl.Map({
 // a longer, softer glide after a flick, so spinning the globe feels smooth
 map.dragPan.enable({ linearity: 0.22, deceleration: 1300, maxSpeed: 2400, easing: (t) => 1 - (1 - t) ** 3 });
 map.addControl(new maplibregl.AttributionControl({ compact: true }), "bottom-left");
+// MapLibre opens the compact credits the first time any appear; start them
+// collapsed to the ⓘ button instead (a tap still opens them)
+{
+  const collapseCredits = () => {
+    const attrib = map.getContainer().querySelector(".maplibregl-ctrl-attrib.maplibregl-compact");
+    if (!attrib) return;
+    attrib.classList.remove("maplibregl-compact-show");
+    map.off("styledata", collapseCredits);
+    map.off("sourcedata", collapseCredits);
+  };
+  map.on("styledata", collapseCredits);
+  map.on("sourcedata", collapseCredits);
+}
 map.touchZoomRotate.disableRotation();
 map.keyboard.disableRotation();
+addEventListener("resize", () => map.setMinZoom(wholeGlobeZoom()));
+
+// Zooming out past the whole globe: the globe (and the ring on it) squeezes a
+// little smaller, harder the further you push, then springs back with a small
+// overshoot when you let go. Wheel / trackpad pinch and two-finger pinch.
+{
+  const stretched = () => [map.getCanvas(), $("ring-overlay")];
+  const MAX_SQUEEZE = 0.14; // at most 14% smaller
+  const SPRING = "transform 560ms cubic-bezier(0.34, 1.56, 0.64, 1)"; // (overshoots, then settles)
+  let squeeze = 0; // 0 … 1 (asymptotic)
+  let letGo = 0;
+  const atMin = () => map.getZoom() <= map.getMinZoom() + 0.02;
+  const paint = (spring: boolean) => {
+    for (const el of stretched()) {
+      el.style.transformOrigin = "50% 50%";
+      el.style.transition = spring ? SPRING : "none";
+      el.style.transform = squeeze ? `scale(${1 - MAX_SQUEEZE * squeeze})` : "";
+    }
+  };
+  const springBack = () => {
+    if (!squeeze) return;
+    squeeze = 0;
+    paint(true);
+  };
+  /** Push further by `x` (≥ 0): each push gives less, like a rubber band. */
+  const push = (x: number) => {
+    squeeze += (1 - squeeze) * Math.min(1, x);
+    paint(false);
+  };
+
+  const box = map.getCanvasContainer();
+  box.addEventListener(
+    "wheel",
+    (e) => {
+      if (e.deltaY <= 0 || !atMin()) return;
+      push((e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY) / (e.ctrlKey ? 120 : 700)); // (ctrl: a trackpad pinch, smaller deltas)
+      clearTimeout(letGo);
+      letGo = window.setTimeout(springBack, 160); // the wheel has no "let go": a pause is one
+    },
+    { passive: true },
+  );
+
+  // two fingers: from where the pinch hit the limit, how much closer they've come
+  let pinchAtMin: number | null = null;
+  const spread = (t: TouchList) => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+  box.addEventListener(
+    "touchmove",
+    (e) => {
+      if (e.touches.length !== 2) return;
+      const d = spread(e.touches);
+      if (!atMin()) {
+        pinchAtMin = null;
+        return;
+      }
+      if (pinchAtMin === null || d > pinchAtMin) pinchAtMin = d;
+      const x = 1 - d / pinchAtMin; // 0 … 1, how far past the limit
+      squeeze = x / (x + 0.35); // (resists more the further you go)
+      paint(false);
+    },
+    { passive: true },
+  );
+  const fingersUp = (e: TouchEvent) => {
+    if (e.touches.length < 2) {
+      pinchAtMin = null;
+      springBack();
+    }
+  };
+  box.addEventListener("touchend", fingersUp);
+  box.addEventListener("touchcancel", fingersUp);
+}
 if (import.meta.env.DEV) (window as unknown as { __map: maplibregl.Map }).__map = map; // for debugging
 prefetchStyles();
 // (the first style is a full load; gameLayers is defined below)
@@ -461,6 +549,12 @@ function goToQuest() {
 }
 $("quest").addEventListener("click", goToQuest);
 
+// while placing: back out to most of the globe (a little closer than the
+// whole thing, so the edges just run off the screen); the ring stays put
+$("globe-btn").addEventListener("click", () =>
+  map.easeTo({ zoom: Math.min(map.getZoom(), wholeGlobeZoom() + 0.45), duration: 900 }),
+);
+
 // ---- the challenge card collapses to its one line (a big ring can sit under it) ----
 function setChallengeCollapsed(collapsed: boolean) {
   const card = $("challenge");
@@ -508,12 +602,9 @@ function renderQuest() {
 
 function renderPuzzle() {
   $("puzzle-num").textContent = practice ? t("practiceTag") : `#${day}${UNLIMITED ? t("testTag") : ""}`;
-  // "Ring 2 of 3 · Standard map · 100 pts", plus the twist if there is one
-  const ringLabel = t("ringLabel", { n: stage + 1, map: DIFFICULTIES[ringMap(stage)].label, max: STAGES[stage].max });
-  const TWIST_LABEL = { "empty-giant": "twistGiant", "packed-tiny": "twistTiny", void: "twistVoid", "mega-crowd": "twistMega" } as const;
-  const twist = puzzle.twist ? t(TWIST_LABEL[puzzle.twist]) : "";
-  $("challenge-label").textContent = twist ? `${ringLabel} · ${twist}` : ringLabel;
-  $("challenge-label").classList.add("twist"); // always shown: it says which ring this is
+  // the ring number badge: "2/3", read out as "Ring 2 of 3"
+  $("ring-no-n").textContent = String(stage + 1);
+  $("ring-no").setAttribute("aria-label", t("ringLabel", { n: stage + 1 }));
   $("challenge-line").innerHTML = t("challengeLine", {
     target: people(puzzle.target),
     radius: fmt(puzzle.radiusKm),
@@ -574,11 +665,44 @@ const overlayExtras = [$("ring-trace"), $("ring-spin")];
 /** While locking in, the ring stays where it was locked (the map glides to frame it). */
 let lockingAt: LngLat | null = null;
 
+/**
+ * Whether the globe hides this point (it's round the back). The overlay is
+ * flat on top of the map, so without this a locked ring would show through
+ * the planet while you spin it. Public API only: the point's pixel, read back,
+ * is the near side of the globe there; if that's somewhere else, the point is
+ * behind it.
+ */
+function hiddenOnGlobe(lng: number, lat: number, at: { x: number; y: number }, toleranceKm: number) {
+  const front = map.unproject([at.x, at.y]);
+  return haversineKm({ lng: front.lng, lat: front.lat }, { lng, lat }) > toleranceKm;
+}
+
 function drawOverlay() {
   const c = lockingAt ?? (locked ? { lng: locked.lng, lat: locked.lat } : map.getCenter());
   // start the path at the top of the ring, so the trace and the glow go round from twelve o'clock
-  const pts = circleRing({ lng: c.lng, lat: c.lat }, puzzle.radiusKm, 96).map(([lng, lat]) => map.project([lng, lat]));
-  const d = `M${pts.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join("L")}Z`;
+  const ring = circleRing({ lng: c.lng, lat: c.lat }, puzzle.radiusKm, 96);
+  const tolerance = 1 + puzzle.radiusKm * 0.02;
+  const pts = ring.map(([lng, lat]) => {
+    const at = map.project([lng, lat]);
+    return { x: at.x, y: at.y, hidden: hiddenOnGlobe(lng, lat, at, tolerance) };
+  });
+  const xy = (p: { x: number; y: number }) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`;
+  let d: string;
+  if (!pts.some((p) => p.hidden)) d = `M${pts.map(xy).join("L")}Z`;
+  else {
+    // only the stretches on the near side of the globe; they end at the horizon
+    const start = pts.findIndex((p, i) => p.hidden && !pts[(i + 1) % pts.length].hidden); // (start just after a hidden run)
+    d = "";
+    let pen = false;
+    for (let k = 1; k <= pts.length; k++) {
+      const p = pts[(start + k) % pts.length];
+      if (p.hidden) pen = false;
+      else {
+        d += `${pen ? "L" : "M"}${xy(p)}`;
+        pen = true;
+      }
+    }
+  }
   overlayPath.setAttribute("d", d);
   for (const el of overlayExtras) el.setAttribute("d", d);
 }
@@ -760,7 +884,6 @@ const gameLayers: GameLayers = () => ({
       paint: { "line-color": QUEST_GOLD, "line-width": 2, "line-opacity": 0.95 },
     },
     { id: "ring-fill", type: "fill", source: "ring", paint: { "fill-color": COLOR.ring, "fill-opacity": 0.12 } },
-    { id: "answer-fill", type: "fill", source: "answer", paint: { "fill-color": COLOR.good, "fill-opacity": 0.15 } },
     {
       id: "answer-line",
       type: "line",
@@ -964,65 +1087,183 @@ function fitRings(rings: { center: LngLat; radiusKm: number }[], duration: numbe
   map.fitBounds(lastBounds, { padding: padding(), duration, maxZoom: 13 });
 }
 
-// ---- mobile: collapsible results panel ----
-function setCollapsed(collapsed: boolean, refit = true) {
-  $("result-panel").classList.toggle("collapsed", collapsed);
-  $("result-toggle").setAttribute("aria-expanded", String(!collapsed));
-  $("result-toggle-label").textContent = t(collapsed ? "showResults" : "hideResults");
-  if (refit && lastBounds) map.fitBounds(lastBounds, { padding: padding(), duration: 400, maxZoom: 13 });
-}
-// Tap the handle to toggle, or swipe it: down collapses, up expands. The panel
-// follows the finger while dragging and snaps on release.
-{
-  const toggle = $("result-toggle");
+/** Wide screens: results in a left column (and no bottom sheet). */
+const wide = matchMedia("(min-width: 800px)");
+
+// ---- phones: the results panel is a bottom sheet ----
+// The handle slides the details shut to a one-line summary (and back). While
+// dragging, the details' height follows the finger and the summary fades in;
+// on release it eases to whichever state the gesture points at. Wide screens
+// show the results in a column with no handle (CSS keeps them open there).
+const sheet = (() => {
   const panel = $("result-panel");
-  const SWIPE_PX = 40; // past this, a release counts as a swipe
-  const TAP_PX = 6; // under this, it was a tap
-  let startY: number | null = null;
-  let dy = 0;
-
+  const body = $("result-body");
+  const details = $("result-details");
+  const summary = $("result-summary");
+  const toggle = $("result-toggle");
+  const EASE = "cubic-bezier(0.22, 1, 0.36, 1)";
+  const MS = 320;
+  const closedH = () => summary.offsetHeight; // the summary line is all that's left
+  const openH = () => details.scrollHeight;
   const isCollapsed = () => panel.classList.contains("collapsed");
+  let settle = 0; // pending end-of-slide timer
 
-  toggle.addEventListener("pointerdown", (e) => {
-    startY = e.clientY;
-    dy = 0;
-    toggle.setPointerCapture(e.pointerId);
-    panel.classList.add("dragging");
-  });
+  /** Show how far open the sheet is (0 shut … 1 open), without animating. */
+  function paint(h: number) {
+    const p = Math.max(0, Math.min(1, (h - closedH()) / Math.max(1, openH() - closedH())));
+    body.style.height = `${h}px`;
+    details.style.opacity = String(Math.min(1, p * 1.6)); // the details clear before the summary appears
+    summary.style.opacity = String(Math.max(0, 1 - p * 2.2));
+  }
 
-  toggle.addEventListener("pointermove", (e) => {
-    if (startY === null) return;
-    dy = e.clientY - startY;
-    // expanded: follows the finger down (and resists going up);
-    // collapsed: a little stretch upwards hints that it will open
-    const shown = isCollapsed() ? Math.max(-60, Math.min(0, dy * 0.35)) : dy > 0 ? dy : dy * 0.2;
-    panel.style.transform = `translateY(${shown}px)`;
-  });
-
-  const finish = () => {
-    if (startY === null) return;
-    startY = null;
-    panel.classList.remove("dragging");
-    panel.style.transform = "";
-    if (Math.abs(dy) < TAP_PX) setCollapsed(!isCollapsed());
-    else if (dy > SWIPE_PX && !isCollapsed()) setCollapsed(true);
-    else if (dy < -SWIPE_PX && isCollapsed()) setCollapsed(false);
-  };
-  toggle.addEventListener("pointerup", finish);
-  toggle.addEventListener("pointercancel", () => {
-    dy = 0; // cancelled gestures don't toggle
-    if (startY !== null) {
-      startY = null;
-      panel.classList.remove("dragging");
-      panel.style.transform = "";
+  /** Slide to open or shut, from wherever the sheet is now. */
+  function slide(collapsed: boolean, animate = true, refit = true) {
+    clearTimeout(settle);
+    panel.classList.toggle("collapsed", collapsed);
+    toggle.setAttribute("aria-expanded", String(!collapsed));
+    $("result-toggle-label").textContent = t(collapsed ? "showResults" : "hideResults");
+    const done = () => {
+      panel.classList.remove("sliding");
+      body.style.transition = details.style.transition = summary.style.transition = "";
+      // open: the details can still grow (the answer line, the quest), so let them size themselves
+      if (!isCollapsed()) body.style.height = "";
+      if (refit && lastBounds) map.fitBounds(lastBounds, { padding: padding(), duration: 400, maxZoom: 13 });
+    };
+    if (!animate || panel.hidden || wide.matches) {
+      body.style.height = collapsed ? `${closedH()}px` : "";
+      details.style.opacity = collapsed ? "0" : "";
+      summary.style.opacity = collapsed ? "1" : "";
+      done();
+      return;
     }
+    panel.classList.add("sliding"); // (clips the details only while they move)
+    paint(body.offsetHeight); // from the current height (open is "auto")
+    void body.offsetHeight;
+    const tr = `${MS}ms ${EASE}`;
+    body.style.transition = `height ${tr}`;
+    details.style.transition = summary.style.transition = `opacity ${tr}`;
+    paint(collapsed ? closedH() : openH());
+    settle = window.setTimeout(done, MS + 20);
+  }
+
+  // Drag anywhere on the panel: the height follows the finger (swipe up to
+  // open, down to shut). On the handle a drag starts at once and a tap
+  // toggles; elsewhere it starts only once the finger clearly moves up or
+  // down, so taps on the buttons still work. On release a flick or a drag
+  // past halfway decides, otherwise it springs back.
+  const TAP_PX = 6;
+  const START_PX = 10;
+  type Drag = { id: number; x: number; y: number; h: number; lastY: number; lastT: number; v: number; onHandle: boolean; active: boolean };
+  let drag: Drag | null = null;
+  let swallowClick = false; // a drag that ended over a button isn't a click
+
+  const begin = (d: Drag) => {
+    clearTimeout(settle);
+    body.style.transition = details.style.transition = summary.style.transition = "";
+    d.h = body.offsetHeight;
+    d.active = true;
+    panel.setPointerCapture(d.id);
+    panel.classList.add("dragging");
+  };
+
+  panel.addEventListener("pointerdown", (e) => {
+    if (wide.matches || drag || (e.pointerType === "mouse" && e.button !== 0)) return;
+    const onHandle = toggle.contains(e.target as Node);
+    drag = { id: e.pointerId, x: e.clientX, y: e.clientY, h: 0, lastY: e.clientY, lastT: e.timeStamp, v: 0, onHandle, active: false };
+    if (onHandle) begin(drag);
   });
+
+  panel.addEventListener("pointermove", (e) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const dy = e.clientY - drag.y;
+    if (!drag.active) {
+      if (Math.abs(dy) < START_PX || Math.abs(dy) < Math.abs(e.clientX - drag.x)) return;
+      begin(drag);
+      drag.y = e.clientY; // (no jump: follow from here)
+      swallowClick = true;
+    }
+    const dt = Math.max(1, e.timeStamp - drag.lastT);
+    drag.v = 0.7 * ((e.clientY - drag.lastY) / dt) + 0.3 * drag.v; // px/ms, + is down
+    drag.lastY = e.clientY;
+    drag.lastT = e.timeStamp;
+    let h = drag.h - (e.clientY - drag.y);
+    // a little give past either end
+    const lo = closedH(), hi = openH();
+    if (h > hi) h = hi + (h - hi) * 0.25;
+    if (h < lo) h = lo - (lo - h) * 0.25;
+    paint(Math.max(lo * 0.6, h));
+  });
+
+  const release = (e: PointerEvent, cancelled: boolean) => {
+    if (!drag || e.pointerId !== drag.id) return;
+    const d = drag;
+    drag = null;
+    if (!d.active) return; // a tap on the panel: let the click through
+    panel.classList.remove("dragging");
+    if (cancelled) return slide(isCollapsed(), true, false);
+    const moved = d.lastY - d.y;
+    if (d.onHandle && Math.abs(moved) < TAP_PX) return slide(!isCollapsed());
+    // a flick decides; otherwise a quarter of the way is enough to commit
+    const FLICK = 0.4; // px/ms
+    const p = (body.offsetHeight - closedH()) / Math.max(1, openH() - closedH());
+    const collapse = d.v > FLICK ? true : d.v < -FLICK ? false : isCollapsed() ? p < 0.25 : p < 0.75;
+    slide(collapse, true, collapse !== isCollapsed());
+  };
+  panel.addEventListener("pointerup", (e) => release(e, false));
+  panel.addEventListener("pointercancel", (e) => release(e, true));
+  panel.addEventListener(
+    "click",
+    (e) => {
+      if (!swallowClick) return;
+      swallowClick = false;
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    true,
+  );
+  panel.addEventListener("pointerdown", () => (swallowClick = false), true);
+
+  // Scrolling over the panel (wheel, trackpad) works like a swipe: fingers up
+  // (natural scrolling: deltaY > 0) opens it, fingers down shuts it to the
+  // summary. One gesture, one move: a trackpad's long tail of wheel events is
+  // ignored until it goes quiet.
+  let wheelSum = 0;
+  let wheelUsed = false;
+  let wheelQuiet = 0;
+  panel.addEventListener(
+    "wheel",
+    (e) => {
+      if (wide.matches || e.ctrlKey) return; // (ctrl + wheel is a pinch zoom)
+      e.preventDefault(); // (don't zoom the map underneath)
+      clearTimeout(wheelQuiet);
+      wheelQuiet = window.setTimeout(() => ((wheelSum = 0), (wheelUsed = false)), 220);
+      if (wheelUsed) return;
+      wheelSum += e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      if (wheelSum > 30 && isCollapsed()) slide(false);
+      else if (wheelSum < -30 && !isCollapsed()) slide(true);
+      else return;
+      wheelUsed = true;
+    },
+    { passive: false },
+  );
 
   // Keyboard (Enter / Space) arrives as a click with detail 0; pointer taps
   // were already handled on pointerup, so ignore their clicks.
   toggle.addEventListener("click", (e) => {
-    if (e.detail === 0) setCollapsed(!isCollapsed());
+    if (e.detail === 0) slide(!isCollapsed());
   });
+  // shut, the summary line opens it too
+  summary.addEventListener("click", () => {
+    if (isCollapsed()) slide(false);
+  });
+  // a wide screen has no sheet: drop any phone-sized inline height
+  wide.addEventListener("change", () => slide(false, false, false));
+
+  return { slide };
+})();
+
+function setCollapsed(collapsed: boolean, refit = true) {
+  sheet.slide(collapsed, false, refit);
 }
 
 function boundsOf(rings: { center: LngLat; radiusKm: number }[]) {
@@ -1034,14 +1275,18 @@ function boundsOf(rings: { center: LngLat; radiusKm: number }[]) {
 // While playing, the challenge sits top centre and the lock-in panel bottom
 // centre. Once you lock in on a wide screen, the results move to a left column
 // (body.showing-result, see CSS) and the map's centre shifts right of it.
-const wide = matchMedia("(min-width: 800px)");
 const SIDEBAR_PX = 16 + 380 + 16;
 const sidebar = () => wide.matches && document.body.classList.contains("showing-result");
 
 function setResultLayout(on: boolean) {
   document.body.classList.toggle("showing-result", on);
-  // the challenge card moves with the layout: place the results below its new spot
-  requestAnimationFrame(updateChallengeBottom);
+  // the challenge card moves with the layout (and on wide screens gets narrower):
+  // refit its line, then place the results below its new spot
+  requestAnimationFrame(() => {
+    fitChallenge();
+    fitCaption(); // (its column changes width too)
+    updateChallengeBottom();
+  });
   // shifting the map's centre waits for any reveal wipe, which needs a still map
   revealDone.then(applyLayoutPadding);
 }
@@ -1083,22 +1328,6 @@ function renderGaugeBands() {
   for (const b of [...bands].reverse()) stops.push(`${b.color} ${pct(-b.outer)}%`, `${b.color} ${pct(-b.inner)}%`);
   for (const b of bands) stops.push(`${b.color} ${pct(b.inner)}%`, `${b.color} ${pct(b.outer)}%`);
   $("gauge-track").style.background = `linear-gradient(to right, ${stops.join(", ")})`;
-  // label the band edges with how many times off they are
-  const labels = $("gauge-labels");
-  labels.innerHTML = "";
-  const add = (decades: number, text: string) => {
-    const span = document.createElement("span");
-    span.style.left = `${pct(decades)}%`;
-    span.textContent = text;
-    labels.append(span);
-  };
-  add(0, t("gaugeTarget"));
-  for (const e of edges.slice(1)) {
-    const x = ratioForScore(SCORE_BANDS[edges.indexOf(e)].min);
-    const t = x >= 10 ? fmt(x) : x.toFixed(0);
-    add(-Math.log10(x), `÷${t}`);
-    add(Math.log10(x), `×${t}`);
-  }
 }
 renderGaugeBands();
 const gaugePos = (ratio: number) =>
@@ -1116,6 +1345,12 @@ function gaugeCaption(r: Result): string {
   return t(close ? (over ? "onlyTooMany" : "onlyTooFew") : over ? "tooMany" : "tooFew", { amount });
 }
 
+/** "Only 64% too many people" always on one line: the font shrinks to fit its column. */
+const fitCaption = () => {
+  if (!$("result-panel").hidden) fitOneLine($("gauge-caption"), wide.matches ? 15 : 14, 10);
+};
+addEventListener("resize", fitCaption);
+
 function renderGauge(r: Result, animate: boolean) {
   const marker = $("gauge-marker");
   const ratio = r.population / puzzle.target;
@@ -1124,9 +1359,10 @@ function renderGauge(r: Result, animate: boolean) {
   marker.classList.toggle("good", r.accuracy >= MATCH_ACCURACY);
   marker.classList.toggle("off-left", offScale && ratio < 1);
   marker.classList.toggle("off-right", offScale && ratio > 1);
-  // "53% too many people · Solid placement." on one line
-  const v = Object.assign(document.createElement("span"), { className: "verdict", textContent: ` · ${verdict(r)}` });
-  $("gauge-caption").replaceChildren(gaugeCaption(r), v);
+  // "Only 53% too many people", then a comment ("Solid placement.") under it
+  $("gauge-caption").textContent = gaugeCaption(r);
+  fitCaption();
+  $("verdict").textContent = verdict(r);
   const gauge = $("gauge");
   gauge.classList.remove("animate");
   gauge.style.setProperty("--pos", "50%");
@@ -1236,7 +1472,7 @@ function showResult(r: Result, animate: boolean) {
   $("result-summary").innerHTML = t("summary", { pop: fmt(r.population), emoji: r.emoji, points: fmtPoints(r.points), max });
   // the quest: complete, or not done (so this ring was pass / fail)
   const qr = $("quest-result");
-  qr.hidden = r.questDone === undefined;
+  $("quest-lines").hidden = r.questDone === undefined;
   qr.classList.toggle("done", !!r.questDone);
   qr.textContent = r.questDone ? t("questDoneLine") : t("questMissedLine", { pass: PASS_SCORE });
   if (r.highest !== undefined) qr.textContent += t("highestLine", heights(r.highest));

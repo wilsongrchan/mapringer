@@ -38,22 +38,36 @@ function tiles(s: Stats) {
   return box;
 }
 
-/** The last 30 days: one bar per finished day (out of 330); unplayed days are a dot on the baseline. */
+/**
+ * The last 30 days, from the first day you played: one bar per finished day
+ * (out of 330); unplayed days are a dot on the baseline. Fewer days get wider
+ * bars (at least 7 slots, so a first day isn't one giant bar).
+ */
 function recentChart(s: Stats) {
   const box = el("section", "stat-section");
   box.append(el("h3", "", t("statsLast30")));
   const W = 300;
-  const H = 64;
+  const H = 84;
   const TOP = 6;
-  const slot = W / 30;
-  const barW = slot - 3; // (a 3px gap between bars)
+  const LEFT = 22; // room for the 100 / 200 / 300 labels
+  const first = s.recent.findIndex((d) => d.total !== null || d.map !== null);
+  const days = first < 0 ? s.recent : s.recent.slice(first);
+  const slot = (W - LEFT) / Math.max(7, days.length);
+  const barW = Math.min(slot - 3, 22); // (at least a 3px gap between bars)
+  const yOf = (pts: number) => H - ((H - TOP) * pts) / DAY_MAX;
   const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H + 2}`, class: "stat-chart", role: "img", "aria-label": t("statsLast30") });
-  // a faint line at the day's max (330) and the baseline
-  svg.append(svgEl("line", { x1: 0, x2: W, y1: TOP, y2: TOP, class: "grid" }), svgEl("line", { x1: 0, x2: W, y1: H, y2: H, class: "axis" }));
-  const offset = 30 - s.recent.length; // fewer than 30 days since launch: bars sit to the right
+  // benchmarks every 100 points (labelled on the left), then the baseline
+  for (const pts of [100, 200, 300]) {
+    const y = yOf(pts);
+    svg.append(svgEl("line", { x1: LEFT, x2: W, y1: y, y2: y, class: "grid" }));
+    const label = svgEl("text", { x: LEFT - 4, y: y + 3, class: "tick" });
+    label.textContent = String(pts);
+    svg.append(label);
+  }
+  svg.append(svgEl("line", { x1: LEFT, x2: W, y1: H, y2: H, class: "axis" }));
   const bars: (SVGElement | null)[] = [];
-  s.recent.forEach((d, i) => {
-    const x = (offset + i) * slot + 1.5;
+  days.forEach((d, i) => {
+    const x = LEFT + i * slot + (slot - barW) / 2;
     if (d.total === null) {
       bars.push(null);
       svg.append(svgEl("circle", { cx: x + barW / 2, cy: H - 2, r: 1.2, class: "gap" }));
@@ -67,9 +81,17 @@ function recentChart(s: Stats) {
     bars.push(bar);
     svg.append(bar);
   });
+  // your average (all days played): above the line was a better-than-usual day
+  if (s.average !== null) {
+    const y = yOf(s.average);
+    svg.append(svgEl("line", { x1: LEFT, x2: W, y1: y, y2: y, class: "avg" }));
+    const label = svgEl("text", { x: W - 1, y: y - 3, class: "avg-label" });
+    label.textContent = t("statsAvgLine", { avg: round(s.average) });
+    svg.append(label);
+  }
   const caption = el("p", "stat-caption");
   const select = (i: number) => {
-    const d = s.recent[i];
+    const d = days[i];
     if (!d) return;
     bars.forEach((b, j) => b?.classList.toggle("on", j === i));
     const map = d.map ? ` · ${DIFFICULTIES[d.map].label}` : "";
@@ -78,14 +100,15 @@ function recentChart(s: Stats) {
   // tap / hover anywhere in a day's column (much bigger than the bar itself)
   const pick = (e: PointerEvent) => {
     const rect = svg.getBoundingClientRect();
-    const i = Math.floor(((e.clientX - rect.left) / rect.width) * 30) - offset;
-    select(Math.max(0, Math.min(s.recent.length - 1, i)));
+    const x = ((e.clientX - rect.left) / rect.width) * W; // (in chart units)
+    const i = Math.floor((x - LEFT) / slot);
+    select(Math.max(0, Math.min(days.length - 1, i)));
   };
   svg.addEventListener("pointermove", pick);
   svg.addEventListener("pointerdown", pick);
   let last = -1;
-  s.recent.forEach((d, i) => d.total !== null && (last = i));
-  select(last >= 0 ? last : s.recent.length - 1);
+  days.forEach((d, i) => d.total !== null && (last = i));
+  select(last >= 0 ? last : days.length - 1);
   box.append(svg, caption);
   return box;
 }
