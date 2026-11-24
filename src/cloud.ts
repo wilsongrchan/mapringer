@@ -31,6 +31,7 @@ export const cloudEnabled = !!(URL_ && KEY);
 const AUTH_KEY = "gamerabbit:auth";
 
 export interface Account {
+  id: string;
   email: string;
 }
 let account: Account | null = null;
@@ -61,8 +62,8 @@ function getClient(): Promise<SupabaseClient> {
 }
 
 function setSession(c: SupabaseClient, session: Session | null) {
-  const next = session?.user ? { email: session.user.email ?? "" } : null;
-  if (next?.email !== account?.email) {
+  const next = session?.user ? { id: session.user.id, email: session.user.email ?? "" } : null;
+  if (next?.id !== account?.id || next?.email !== account?.email) {
     account = next;
     for (const f of listeners) f(account);
   }
@@ -151,6 +152,21 @@ async function insertRings(c: SupabaseClient, rs: Result[]) {
 async function insertDays(c: SupabaseClient, ds: { day: number; map: Difficulty }[]) {
   const { error } = await c.from("mapringer_days").upsert(ds, { onConflict: "user_id,day", ignoreDuplicates: true });
   if (error) throw error;
+}
+
+/** Signed in on this device, or about to be (the session is still being restored)? */
+export function maybeSignedIn(): boolean {
+  if (account) return true;
+  try {
+    return cloudEnabled && !!localStorage.getItem(AUTH_KEY);
+  } catch {
+    return false;
+  }
+}
+
+/** The database client, while signed in (friends.ts uses it). */
+export function signedInClient(): Promise<SupabaseClient> | null {
+  return account && client ? client : null;
 }
 
 /** Save a just-played ring to the account too (if signed in; a failure is retried at the next sync). */

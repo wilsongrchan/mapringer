@@ -35,7 +35,9 @@ import {
 } from "./puzzle";
 import { computeStats } from "./stats";
 import { renderStats } from "./stats-view";
-import { cloudEnabled, currentAccount, googleEnabled, onAccount, pushDayMap, pushResult, sendCode, signInWithGoogle, signOut, startCloud, verifyCode } from "./cloud";
+import { cloudEnabled, currentAccount, googleEnabled, maybeSignedIn, onAccount, pushDayMap, pushResult, sendCode, signInWithGoogle, signOut, startCloud, verifyCode } from "./cloud";
+import { cleanCode, friendsApi, friendsPossible } from "./friends";
+import { renderFriends, type FriendsCtx } from "./friends-view";
 import { loadAllDays, loadDayMap, loadResult, saveDayMap, saveResult, type Result } from "./storage";
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -94,7 +96,7 @@ const dayDone = () => results.every(Boolean);
 
 /** One bright gold for everything quest-related: hint lines, borders, the quest's sample ring. */
 const QUEST_GOLD = "#f5b700";
-const COLOR = { ring: "#e4572e", good: "#2a9d8f", quest: QUEST_GOLD };
+const COLOR = { ring: "#e4572e", good: "#2a9d8f", quest: QUEST_GOLD, friend: "#7b4fd6" };
 
 preloadPopulation();
 
@@ -816,6 +818,20 @@ function updateRing() {
 let answerData: Feature | typeof EMPTY = EMPTY;
 let questAnswerData: Feature | typeof EMPTY = EMPTY; // a sample ring that does the quest
 let ringData: Feature | typeof EMPTY = EMPTY;
+/** A friend's ring for today (Friends › a friend › Show on map): the circle and a named centre. */
+let friendData: { type: "FeatureCollection"; features: object[] } = EMPTY;
+function setFriendRing(ring: { name: string; at: LngLat; radiusKm: number } | null) {
+  friendData = !ring
+    ? EMPTY
+    : {
+        type: "FeatureCollection",
+        features: [
+          circleFeature(ring.at, ring.radiusKm),
+          { type: "Feature", properties: { name: ring.name }, geometry: { type: "Point", coordinates: [ring.at.lng, ring.at.lat] } },
+        ],
+      };
+  (map.getSource("friend") as maplibregl.GeoJSONSource | undefined)?.setData(friendData as Parameters<maplibregl.GeoJSONSource["setData"]>[0]);
+}
 type PointFC = { type: "FeatureCollection"; features: { type: "Feature"; properties: { kind: string }; geometry: { type: "Point"; coordinates: [number, number] } }[] };
 let centerData: PointFC = { type: "FeatureCollection", features: [] };
 
@@ -856,6 +872,7 @@ const gameLayers: GameLayers = () => ({
       attribution: "Elevation: Mapzen Terrain Tiles",
     },
     centers: { type: "geojson", data: centerData },
+    friend: { type: "geojson", data: friendData },
   },
   layers: [
     {
@@ -932,6 +949,23 @@ const gameLayers: GameLayers = () => ({
         "text-offset": ["get", "offset"] as unknown as maplibregl.DataDrivenPropertyValueSpecification<[number, number]>,
       },
       paint: { "text-color": "#8a6400", "text-halo-color": "rgba(255,255,255,0.95)", "text-halo-width": 1.6 },
+    },
+    // a friend's ring (purple), with their name under its centre
+    { id: "friend-line", type: "line", source: "friend", filter: ["==", ["geometry-type"], "Polygon"], paint: { "line-color": COLOR.friend, "line-width": 3 } },
+    {
+      id: "friend-dot",
+      type: "circle",
+      source: "friend",
+      filter: ["==", ["geometry-type"], "Point"],
+      paint: { "circle-radius": 6, "circle-color": COLOR.friend, "circle-stroke-color": "#ffffff", "circle-stroke-width": 2.5 },
+    },
+    {
+      id: "friend-label",
+      type: "symbol",
+      source: "friend",
+      filter: ["==", ["geometry-type"], "Point"],
+      layout: { "text-field": ["get", "name"], "text-font": ["Noto Sans Bold"], "text-size": 13, "text-anchor": "top", "text-offset": [0, 0.9] },
+      paint: { "text-color": "#4b2a9e", "text-halo-color": "rgba(255,255,255,0.95)", "text-halo-width": 1.8 },
     },
     {
       id: "centers",
@@ -1709,6 +1743,7 @@ function renderDayEnd() {
 /** Back to placing a ring (the current stage's), on the day's map. */
 function resetPlay() {
   attempt++;
+  setFriendRing(null);
   locked = null;
   clearLockAnimation();
   $("result-panel").hidden = true;
@@ -1752,6 +1787,7 @@ async function startRing(st: Stage) {
   try {
     setInteractive(false);
     attempt++; // drop the last ring's pending searches (they'd re-frame the map)
+    setFriendRing(null);
     $("result-panel").hidden = true;
     setChallengeCollapsed(false); // a new ring: show its quest
     setResultLayout(false);
@@ -1851,12 +1887,51 @@ function currentStats() {
   return computeStats(loadAllDays(), todaysNumber());
 }
 const statsDialog = $<HTMLDialogElement>("stats-dialog");
-function openStats() {
+/** The stats dialog, on your stats or (accounts on) the Friends tab. */
+function openStats(tab: "stats" | "friends" = "stats") {
   renderStats($("stats-body"), currentStats());
-  statsDialog.showModal();
+  $("tab-friends").hidden = !friendsPossible();
+  showStatsTab(tab, true);
+  if (!statsDialog.open) statsDialog.showModal();
 }
-$("stats-btn").addEventListener("click", openStats);
-$("streak-line").addEventListener("click", openStats);
+function showStatsTab(tab: "stats" | "friends", fresh = false) {
+  const friends = tab === "friends" && friendsPossible();
+  $("tab-stats").setAttribute("aria-selected", String(!friends));
+  $("tab-friends").setAttribute("aria-selected", String(friends));
+  $("stats-pane").hidden = friends;
+  $("friends-pane").hidden = !friends;
+  if (friends) renderFriends($("friends-pane"), friendsCtx, fresh);
+}
+$("tab-stats").addEventListener("click", () => showStatsTab("stats"));
+$("tab-friends").addEventListener("click", () => showStatsTab("friends", true));
+$("stats-btn").addEventListener("click", () => openStats());
+$("streak-line").addEventListener("click", () => openStats());
+
+const friendsCtx: FriendsCtx = {
+  today: todaysNumber(),
+  signIn: () => {
+    statsDialog.close();
+    openSignIn();
+  },
+  toast: (msg) => toast(msg),
+  // a friend's ring for today, in purple with their name; it stays until the next ring starts
+  showRing: (name, r) => {
+    statsDialog.close();
+    const radiusKm = dayRings(r.puzzle)[r.stage].radiusKm;
+    setFriendRing({ name, at: { lng: r.lng, lat: r.lat }, radiusKm });
+    // phones: slide the results shut first, so their ring has the screen
+    const sheetOpen = !wide.matches && !$("result-panel").hidden && !$("result-panel").classList.contains("collapsed");
+    if (sheetOpen) sheet.slide(true, true, false);
+    setTimeout(() => fitRings([{ center: { lng: r.lng, lat: r.lat }, radiusKm: radiusKm * 1.2 }], 1200), sheetOpen ? 360 : 0);
+  },
+  inviteUrl: (code) => {
+    const url = new URL(location.href);
+    url.search = "";
+    url.hash = "";
+    url.searchParams.set("friend", code);
+    return url.toString();
+  },
+};
 $("stats-close").addEventListener("click", () => statsDialog.close());
 
 // ---- Game Rabbit accounts (cloud.ts): stats kept in the account, on any device ----
@@ -1989,8 +2064,64 @@ $("signin-close").addEventListener("click", () => signInDialog.close());
 onAccount(() => {
   renderAccount();
   if (statsDialog.open) renderStats($("stats-body"), currentStats());
+  if (statsDialog.open && !$("friends-pane").hidden) renderFriends($("friends-pane"), friendsCtx, true);
+  addInvitedFriend();
   if (!$("result-panel").hidden) renderDayEnd(); // (the streak line)
 });
+// ---- an invite link (?friend=CODE, Friends › Copy invite link): add that friend ----
+// Signed in, it's added straight away and the Friends tab opens; signed out, the
+// code waits (this tab's session) while you sign in.
+const INVITE_KEY = "mapringer:invite";
+{
+  const code = cleanCode(params.get("friend") ?? "");
+  if (code) {
+    try {
+      sessionStorage.setItem(INVITE_KEY, code);
+    } catch {
+      /* storage unavailable: the link just opens the game */
+    }
+    const url = new URL(location.href);
+    url.searchParams.delete("friend");
+    history.replaceState(history.state, "", url);
+    // nobody signed in here: ask (once the page has settled)
+    if (cloudEnabled && !maybeSignedIn() && !friendsPossibleWithoutAccount())
+      setTimeout(() => {
+        toast(t("friendsLinkSignIn"));
+        openSignIn();
+      }, 600);
+  }
+}
+function friendsPossibleWithoutAccount() {
+  return import.meta.env.DEV && (params.has("fakefriends") || !cloudEnabled);
+}
+let addingInvite = false;
+async function addInvitedFriend() {
+  let code: string | null = null;
+  try {
+    code = sessionStorage.getItem(INVITE_KEY);
+  } catch {
+    /* no storage */
+  }
+  if (!code || addingInvite) return;
+  const api = await friendsApi();
+  if (!api) return; // (not signed in yet: tried again when the account arrives)
+  addingInvite = true;
+  try {
+    const r = await api.add(code);
+    sessionStorage.removeItem(INVITE_KEY);
+    const name = r.name || t("friendsNoName");
+    if (r.status === "accepted") toast(t("friendsAddAccepted", { name }));
+    else if (r.status === "pending") toast(t("friendsAddSent", { name }));
+    else if (r.status === "not_found") toast(t("friendsAddNotFound"));
+    if (r.status === "accepted" || r.status === "pending") openStats("friends");
+  } catch (e) {
+    console.warn("invite", e);
+  } finally {
+    addingInvite = false;
+  }
+}
+if (friendsPossibleWithoutAccount()) addInvitedFriend();
+
 startCloud((days) => {
   // rings from the account (e.g. played on another device): today's change the
   // game itself, so start over from them (unless a ring is being locked in)

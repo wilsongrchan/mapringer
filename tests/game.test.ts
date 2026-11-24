@@ -538,7 +538,7 @@ describe("share text", () => {
 });
 
 describe("stats", async () => {
-  const { computeStats } = await import("../src/stats");
+  const { computeStats, daysFromRings } = await import("../src/stats");
   type R = import("../src/storage").Result;
   const ring = (day: number, stage: Stage, points: number, grade: R["grade"] = "good", map: R["map"] = "hard"): R =>
     ({ puzzle: day, stage, lng: 0, lat: 0, population: 1, accuracy: 1, score: 1, grade, emoji: "", points, map }) as R;
@@ -578,5 +578,16 @@ describe("stats", async () => {
     expect(s.played).toBe(1);
     expect(s.byMap.easy.played + s.byMap.standard.played + s.byMap.hard.played).toBe(0);
     expect(s.grades).toMatchObject({ good: 1, pass: 1, miss: 1 });
+  });
+
+  it("a friend's rings (any order, a day half played) group into days for their stats", () => {
+    const rings = [ring(4, 2, 70), ring(2, 0, 50), ring(4, 0, 50), ring(2, 1, 60), ring(4, 1, 60), ring(2, 2, 70), ring(5, 0, 30)];
+    const days = daysFromRings(rings);
+    expect(days.map((d) => d.day)).toEqual([2, 4, 5]);
+    expect(days[1].rings.map((r) => r?.points)).toEqual([50, 60, 70]);
+    expect(days[2].rings.map((r) => r?.points ?? null)).toEqual([30, null, null]);
+    const s = computeStats(days, 5);
+    expect(s.played).toBe(2); // (day 5 isn't finished)
+    expect(s.average).toBe(180);
   });
 });

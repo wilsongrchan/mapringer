@@ -42,6 +42,17 @@ const mapOf = (d: DayRecord): Difficulty | null => {
 };
 const avg = (xs: number[]) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
 
+/** Rings (anyone's: a friend's come from the account) grouped into days, for computeStats. */
+export function daysFromRings(rings: Result[]): DayRecord[] {
+  const byDay = new Map<number, DayRecord>();
+  for (const r of rings) {
+    const d = byDay.get(r.puzzle) ?? { day: r.puzzle, rings: [null, null, null], map: null };
+    d.rings[r.stage] = r;
+    byDay.set(r.puzzle, d);
+  }
+  return [...byDay.values()].sort((a, b) => a.day - b.day);
+}
+
 export function computeStats(days: DayRecord[], today: number, window = 30): Stats {
   const done = days.filter(isDone).sort((a, b) => a.day - b.day);
   const doneSet = new Set(done.map((d) => d.day));

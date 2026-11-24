@@ -205,16 +205,23 @@
     <!-- stats from the rings saved in this browser (main.ts openStats, stats-view.ts) -->
     <dialog id="stats-dialog" class="card stats">
       <div class="dialog-head">
-        <h2 data-i18n="statsTitle">Your stats</h2>
+        <!-- your stats | friends (friends-view.ts); with no accounts (the test site) only the first shows, as the title -->
+        <h2 class="stats-tabs" role="tablist">
+          <button role="tab" id="tab-stats" aria-selected="true" aria-controls="stats-pane" data-i18n="statsTitle">Your stats</button>
+          <button role="tab" id="tab-friends" aria-selected="false" aria-controls="friends-pane" data-i18n="friendsTab" hidden>Friends</button>
+        </h2>
         <button class="dialog-x" id="stats-close" data-i18n-label="closeLabel" aria-label="Close">✕</button>
       </div>
-      <div id="stats-body"></div>
-      <!-- signed out: "saved in this browser" + sign in; signed in: the account (main.ts renderAccount) -->
-      <div class="account-line">
-        <p class="small" id="account-text" data-i18n="statsLocal"></p>
-        <button class="link-btn" id="account-btn" hidden></button>
+      <div id="stats-pane" role="tabpanel" aria-labelledby="tab-stats">
+        <div id="stats-body"></div>
+        <!-- signed out: "saved in this browser" + sign in; signed in: the account (main.ts renderAccount) -->
+        <div class="account-line">
+          <p class="small" id="account-text" data-i18n="statsLocal"></p>
+          <button class="link-btn" id="account-btn" hidden></button>
+        </div>
+        <div class="dialog-actions"><button id="stats-practice" data-i18n="practice">Practice</button></div>
       </div>
-      <div class="dialog-actions"><button id="stats-practice" data-i18n="practice">Practice</button></div>
+      <div id="friends-pane" class="friends" role="tabpanel" aria-labelledby="tab-friends" hidden></div>
     </dialog>
 
     <!-- Game Rabbit sign-in: Google, or a code sent by email (cloud.ts) -->

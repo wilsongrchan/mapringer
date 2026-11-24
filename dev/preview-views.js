@@ -99,6 +99,34 @@ const practice = (name, stage, kinds, path = "/?practice") => ({
   },
 });
 
+/**
+ * The Friends tab with made-up friends, on today (where friends' spots show).
+ * `doneToday`: you've finished today's three rings (so their spots unlock).
+ * `open`: then open that friend's page.
+ */
+function friends(name, doneToday, open = null) {
+  return {
+    name,
+    path: `/?unlimited=0&fakefriends`,
+    once: () => {
+      localStorage.setItem("mapringer:seen-help", "1");
+      clearDay(TODAY);
+      if (doneToday) saveDay(TODAY, ["close", "done", "pass"]);
+      else localStorage.setItem(`mapringer:map:${TODAY}`, MAP);
+    },
+    after: async (iframe) => {
+      const w = await settle(iframe);
+      const doc = w.document;
+      doc.querySelector("#stats-btn").click();
+      await sleep(200);
+      doc.querySelector("#tab-friends").click();
+      if (!open) return;
+      for (let i = 0; i < 40 && !doc.querySelector(".friend-open"); i++) await sleep(100);
+      [...doc.querySelectorAll(".friend-open")].find((b) => b.textContent.includes(open))?.click();
+    },
+  };
+}
+
 // a finished yesterday (the finished-day view), and 30 days of history before it (stats)
 const YESTERDAY = TODAY - 1;
 function seedHistory() {
@@ -168,6 +196,20 @@ const VIEWS = [
       localStorage.setItem("mapringer:seen-help", "1");
       saveDay(YESTERDAY, ["close", "done", "pass"]);
     },
+  },
+  // friends: made-up friends (?fakefriends, src/friends-fake.ts): Mei shares, Tom hides, Aisha hasn't played today
+  friends("Friends · list", false),
+  friends("Friends · Mei, today locked", false, "Mei"),
+  friends("Friends · Mei, today open", true, "Mei"),
+  friends("Friends · Tom hides spots", true, "Tom"),
+  {
+    name: "Friends · invite link",
+    path: `/?unlimited=0&fakefriends&friend=ABC234`,
+    once: () => {
+      localStorage.setItem("mapringer:seen-help", "1");
+      localStorage.setItem(`mapringer:map:${TODAY}`, MAP);
+    },
+    after: async () => {}, // (keep the Friends tab the link opens)
   },
   ring("How to play", 0, [], {
     after: async (iframe) => {

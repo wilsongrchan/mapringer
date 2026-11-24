@@ -122,9 +122,9 @@ const GRADE_LABEL: Record<GradeBucket, Parameters<typeof t>[0]> = {
 };
 
 /** Every ring played, by how it went. */
-function gradeBars(s: Stats) {
+function gradeBars(s: Stats, friend: boolean) {
   const box = el("section", "stat-section");
-  box.append(el("h3", "", t("statsRings")));
+  box.append(el("h3", "", t(friend ? "friendsRings" : "statsRings")));
   const most = Math.max(1, ...Object.values(s.grades));
   const list = el("div", "grade-bars");
   for (const g of Object.keys(GRADE_LABEL) as GradeBucket[]) {
@@ -155,11 +155,12 @@ function mapRows(s: Stats) {
   return box;
 }
 
-export function renderStats(body: HTMLElement, s: Stats): void {
+/** `friend`: a friend's stats (their page in the Friends tab), so "their rings", not "your rings". */
+export function renderStats(body: HTMLElement, s: Stats, friend = false): void {
   const anything = s.played > 0 || Object.values(s.grades).some(Boolean);
   if (!anything) {
     body.replaceChildren(tiles(s), el("p", "stat-empty", t("statsEmpty")));
     return;
   }
-  body.replaceChildren(tiles(s), recentChart(s), gradeBars(s), mapRows(s));
+  body.replaceChildren(tiles(s), recentChart(s), gradeBars(s, friend), mapRows(s));
 }
