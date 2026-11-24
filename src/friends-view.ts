@@ -44,22 +44,33 @@ const nameOf = (f: { name: string }) => f.name || t("friendsNoName");
 let view: { friend: Friend } | null = null; // null: the list
 let run = 0; // a newer render replaces an older one still loading
 
-/** Show the Friends tab in `box` (the list, or the friend last opened). */
+/**
+ * Show the Friends tab in `box` (the list, or the friend last opened). While it
+ * loads, an orange ring spins in the middle of the dialog (which keeps one
+ * height for both tabs, see style.css).
+ */
 export function renderFriends(box: HTMLElement, ctx: FriendsCtx, reset = false): void {
   if (reset) view = null;
   const mine = ++run;
   const stale = () => mine !== run;
-  box.replaceChildren(el("p", "small friends-loading", "…"));
+  const loading = el("div", "friends-loading");
+  loading.setAttribute("role", "status");
+  loading.setAttribute("aria-label", t("friendsLoading"));
+  loading.append(el("span", "ring-spinner"));
+  box.replaceChildren(loading);
+  const show = (...parts: Node[]) => {
+    if (stale()) return;
+    box.replaceChildren(...parts);
+  };
   friendsApi()
     .then(async (api) => {
       if (stale()) return;
-      if (!api) return box.replaceChildren(signedOut(ctx));
-      const parts = view ? await friendPage(api, view.friend, box, ctx) : await friendList(api, box, ctx);
-      if (!stale()) box.replaceChildren(...parts);
+      if (!api) return show(signedOut(ctx));
+      show(...(view ? await friendPage(api, view.friend, box, ctx) : await friendList(api, box, ctx)));
     })
     .catch((e) => {
       console.warn("friends", e);
-      if (!stale()) box.replaceChildren(el("p", "small", t("friendsError")));
+      show(el("p", "small", t("friendsError")));
     });
 }
 

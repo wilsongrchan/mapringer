@@ -166,6 +166,7 @@ const en = {
   statsTitle: "Your stats",
   // friends (the Friends tab of the stats dialog; the shared Game Rabbit friend list)
   friendsTab: "Friends",
+  friendsLoading: "Loading friends…",
   friendsSignIn: "Sign in to add friends and see their stats. Once you've played today's three rings, you can see where they put theirs.",
   friendsYou: "You",
   friendsNickname: "Nickname",
@@ -403,6 +404,7 @@ const zh: Record<Key, Entry> = {
   statsTitle: "成績總結",
   // 好友（戰績視窗的「好友」分頁；Game Rabbit 共用的好友名單）
   friendsTab: "好友",
+  friendsLoading: "正在載入好友…",
   friendsSignIn: "登入後可以加好友、看他們的戰績。玩完今日三個圈後，還可以看到他們把圈放在哪裡。",
   friendsYou: "你",
   friendsNickname: "暱稱",
